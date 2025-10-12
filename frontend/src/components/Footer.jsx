@@ -1,0 +1,17 @@
+import React from 'react'
+export default function Footer(){
+  return (
+    <footer className="border-t border-line py-8 text-muted bg-gradient-to-t from-white/60 to-transparent">
+      <div className="container mx-auto px-4 flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <div className="font-serif text-[1.1rem]"><span className="inline-block px-2 py-1 rounded-full bg-gradient-to-br from-gold to-blush shadow-tiny">Fate</span></div>
+          <div className="mt-1">© 2025 Fate. Все права защищены.</div>
+        </div>
+        <div>
+          <div>Контакты: <a className="underline" href="mailto:hello@fate.books">hello@fate.books</a></div>
+          <div className="mt-1">Ташкент, Узбекистан</div>
+        </div>
+      </div>
+    </footer>
+  )
+}
