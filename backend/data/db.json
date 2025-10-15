@@ -39,13 +39,17 @@
       "passHash": "$2a$10$Jr.jt.00qDFrswXLmv42gODUXMV1XVRv3xzmFc12/Iw/7KvO8WIua",
       "isAdmin": false,
       "createdAt": "2025-10-15T17:39:54.375Z"
+    },
+    {
+      "id": "tjFnthsZE-LfxHrcIOFaI",
+      "name": "аца",
+      "email": "fa32@gmail.com",
+      "passHash": "$2a$10$VENGe5RdOVVIcrTV.D9B5uXg.xh.9ipF40fVDXPPTFYK2lWLA8qMi",
+      "isAdmin": false,
+      "createdAt": "2025-10-15T18:41:19.925Z"
     }
   ],
-  "questions": [
-    "Какой маленький момент вы не хотите забыть?",
-    "Опишите чувство дома в трёх предложениях.",
-    "Сообщение себе в будущем:"
-  ],
+  "questions": [],
   "answers": {
     "aEGgmM9ANny4U7rNaivss": [
       {
