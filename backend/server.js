@@ -188,6 +188,11 @@ app.get('/api/questions', authRequired, (req, res) => {
   const list = (db.userQuestions && db.userQuestions[req.user.id]) || [];
   res.json(list);
 });
+app.get('/api/answers', authRequired, (req, res) => {
+  const db = readDB();
+  const entries = db.answers[req.user.id] || [];
+  res.json(entries);
+});
 app.post('/api/answers', authRequired, csrfRequired, writeLimiter, (req, res) => {
 
   const { entries } = req.body || {};
@@ -266,4 +271,3 @@ app.post('/api/admin/users/:id/status', authRequired, adminRequired, csrfRequire
 
 
 app.listen(PORT, () => console.log('Fate API http://localhost:' + PORT));
-

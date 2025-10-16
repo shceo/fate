@@ -17,7 +17,7 @@ export default function Header(){
             </>}
             {user && <>
               <Link className="btn" to="/dashboard">Кабинет</Link>
-              {user.isAdmin && <Link className="btn" to="/admin">Админ</Link>}
+              {/* {user.isAdmin && <Link className="btn" to="/admin">Админ</Link>} */}
               <button className="btn" onClick={logout}>Выйти</button>
             </>}
           </nav>

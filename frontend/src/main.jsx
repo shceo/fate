@@ -14,6 +14,7 @@ import AdminLayout from "./pages/admin/AdminLayout.jsx";
 import Users from "./pages/admin/Users.jsx";
 import UserDetail from "./pages/admin/UserDetail.jsx";
 import { AuthProvider } from "./shared/AuthContext.jsx";
+import { QuestionsProvider } from "./shared/QuestionsContext.jsx";
 import Protected from "./shared/Protected.jsx";
 import AdminProtected from "./shared/AdminProtected.jsx";
 import Templates from "./pages/admin/Templates.jsx";
@@ -73,7 +74,9 @@ const router = createBrowserRouter([
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AuthProvider>
-      <RouterProvider router={router} />
+      <QuestionsProvider>
+        <RouterProvider router={router} />
+      </QuestionsProvider>
     </AuthProvider>
   </React.StrictMode>
 );

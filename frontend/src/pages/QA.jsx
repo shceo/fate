@@ -1,109 +1,166 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
 import Progress from "../components/Progress.jsx";
+import QuestionsEmptyState from "../components/QuestionsEmptyState.jsx";
 import { apiPost } from "../shared/api.js";
+import { useQuestions } from "../shared/QuestionsContext.jsx";
 
 export default function QA() {
-  const [qIndex, setQIndex] = useState(0);
-  const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState({});
-  const [toast, setToast] = useState(null); // кастомный тост по центру
+  const {
+    questions,
+    answers,
+    updateAnswer,
+    progress,
+    answeredCount,
+    totalCount,
+    saveAnswers,
+    loaded,
+    loading,
+  } = useQuestions();
+  const [index, setIndex] = useState(0);
+  const [toast, setToast] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch("/api/questions", { credentials: "include" })
-      .then((r) => r.json())
-      .then(setQuestions);
-  }, []);
+    if (questions.length === 0) {
+      setIndex(0);
+      return;
+    }
+    setIndex((prev) => Math.min(prev, questions.length - 1));
+  }, [questions]);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 1600);
+  const showToast = (message) => {
+    setToast(message);
+    window.setTimeout(() => setToast(null), 2000);
   };
 
-  const save = async () => {
-    const entries = Object.keys(answers).map((i) => ({
-      questionIndex: Number(i),
-      text: answers[i],
-    }));
-    await apiPost("/api/answers", { entries });
-    showToast("Ответ сохранён");
+  const persistAnswers = async (withSuccessToast = true) => {
+    if (busy) return false;
+    let ok = true;
+    try {
+      setBusy(true);
+      await saveAnswers();
+      if (withSuccessToast) showToast("Ответы сохранены");
+    } catch (error) {
+      console.error("Failed to save answers", error);
+      showToast("Не удалось сохранить. Попробуйте позже.");
+      ok = false;
+    } finally {
+      setBusy(false);
+    }
+    return ok;
   };
 
-  const next = async () => {
-    if (qIndex < questions.length - 1) {
-      setQIndex(qIndex + 1);
-    } else {
+  const handleNext = async () => {
+    if (questions.length === 0 || busy) return;
+    if (index < questions.length - 1) {
+      setIndex((prev) => Math.min(prev + 1, questions.length - 1));
+      return;
+    }
+
+    const saved = await persistAnswers(false);
+    if (!saved) return;
+
+    try {
+      setBusy(true);
       await apiPost("/api/complete", {});
       location.href = "/complete";
+    } catch (error) {
+      console.error("Failed to complete questionnaire", error);
+      showToast("Не удалось завершить. Попробуйте снова.");
+    } finally {
+      setBusy(false);
     }
   };
 
-  const prev = () => setQIndex(Math.max(0, qIndex - 1));
-  const value = answers[qIndex] || "";
+  const handlePrev = () => {
+    if (busy) return;
+    setIndex((prev) => Math.max(0, prev - 1));
+  };
+
+  const value = answers[index] ?? "";
+  const disabled = busy || loading;
 
   return (
     <div>
       <Header />
 
-      {/* Тост по центру */}
       {toast && (
         <div className="fixed inset-0 z-[60] grid place-items-center pointer-events-none">
           <div className="pointer-events-auto card-glass px-6 py-4 text-center shadow-soft">
-            <div className="font-serif text-lg">✨ {toast}</div>
+            <div className="font-serif text-lg">⟡ {toast}</div>
           </div>
         </div>
       )}
 
       <section className="min-h-[100dvh] grid place-items-center py-8 px-4">
         <div className="paper w-[min(820px,94vw)] p-6">
-          {questions.length === 0 ? (
-            <div className="text-center">
-              <div className="font-serif text-[clamp(1.4rem,3.8vw,2rem)]">
-                Скоро администратор отправит вам вопросы
+          <div className="flex justify-between items-center flex-wrap gap-3 mb-4">
+            <Link className="btn" to="/dashboard">
+              Вернуться к обычному режиму
+            </Link>
+            {totalCount > 0 && (
+              <div className="text-muted text-sm">
+                Отвечено {answeredCount} из {totalCount}
               </div>
-              <div className="text-muted mt-1">
-                Как только они появятся, вы сможете отвечать здесь.
-              </div>
+            )}
+          </div>
+
+          {!loaded || loading ? (
+            <div className="text-center text-muted py-10">
+              Загружаем вопросы...
             </div>
+          ) : questions.length === 0 ? (
+            <QuestionsEmptyState />
           ) : (
             <>
               <div className="text-muted flex justify-between flex-wrap gap-2">
                 <span>
-                  Вопрос {qIndex + 1} из {questions.length}
+                  Вопрос {index + 1} из {questions.length}
                 </span>
-                <span>Черновик: Ваша книга</span>
+                <span>
+                  Вы можете вернуться и поправить ответ в любой момент
+                </span>
               </div>
 
-              <h1 className="font-serif text-[clamp(1.4rem,3.8vw,2.4rem)] leading-tight mt-2">
-                {questions[qIndex] || ""}
+              <h1 className="font-serif text-[clamp(1.4rem,3.8vw,2.4rem)] leading-tight mt-2 break-words">
+                {questions[index] || ""}
               </h1>
 
-              <Progress
-                value={Math.round(
-                  100 * ((qIndex + 1) / (questions.length || 1))
-                )}
-              />
+              <Progress value={progress} />
 
               <textarea
                 className="input min-h-[220px] text-[1.05rem] mt-3"
-                placeholder="Напишите здесь свой ответ…"
+                placeholder="Запишите свои мысли, воспоминания или детали, которые хотите сохранить"
                 value={value}
-                onChange={(e) =>
-                  setAnswers((a) => ({ ...a, [qIndex]: e.target.value }))
-                }
+                onChange={(e) => updateAnswer(index, e.target.value)}
+                disabled={disabled}
               />
 
               <div className="flex justify-between gap-2 mt-3">
-                <button className="btn" onClick={prev} disabled={qIndex === 0}>
+                <button
+                  className="btn"
+                  onClick={handlePrev}
+                  disabled={index === 0 || disabled}
+                >
                   Назад
                 </button>
                 <div className="flex gap-2">
-                  <button className="btn" onClick={save}>
+                  <button
+                    className="btn"
+                    onClick={() => persistAnswers(true)}
+                    disabled={disabled}
+                  >
                     Сохранить
                   </button>
-                  <button className="btn primary" onClick={next}>
-                    {qIndex < questions.length - 1 ? "Далее" : "Завершить"}
+                  <button
+                    className="btn primary"
+                    onClick={handleNext}
+                    disabled={disabled}
+                  >
+                    {index < questions.length - 1 ? "Далее" : "Завершить"}
                   </button>
                 </div>
               </div>

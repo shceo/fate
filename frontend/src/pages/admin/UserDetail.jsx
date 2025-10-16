@@ -202,7 +202,7 @@ export default function UserDetail() {
                   <div className="w-6 h-6 grid place-items-center rounded-full bg-gradient-to-b from-gold to-blush text-[#5b5246] shrink-0">
                     {i + 1}
                   </div>
-                  <div className="flex-1 whitespace-pre-wrap">{q}</div>
+                  <div className="flex-1 whitespace-pre-wrap break-words">{q}</div>
                   <button
                     className="btn"
                     onClick={() => removeQuestionAt(i)}
@@ -229,7 +229,7 @@ export default function UserDetail() {
                   <div className="text-muted text-sm mb-1">
                     Вопрос {a.questionIndex + 1}
                   </div>
-                  <div className="whitespace-pre-wrap">{a.text || "—"}</div>
+                  <div className="whitespace-pre-wrap break-words">{a.text || "-"}</div>
                 </div>
               ))
             ) : (
