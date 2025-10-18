@@ -34,3 +34,18 @@ CREATE TABLE IF NOT EXISTS answers (
 );
 
 CREATE INDEX IF NOT EXISTS answers_user_idx ON answers (user_id);
+
+ALTER TABLE app_users
+  ADD COLUMN IF NOT EXISTS telegram_id TEXT;
+ALTER TABLE app_users
+  ADD COLUMN IF NOT EXISTS telegram_username TEXT;
+ALTER TABLE app_users
+  ADD COLUMN IF NOT EXISTS telegram_first_name TEXT;
+ALTER TABLE app_users
+  ADD COLUMN IF NOT EXISTS telegram_last_name TEXT;
+ALTER TABLE app_users
+  ADD COLUMN IF NOT EXISTS telegram_phone TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS app_users_telegram_id_key
+  ON app_users (telegram_id)
+  WHERE telegram_id IS NOT NULL;

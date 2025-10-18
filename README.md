@@ -100,3 +100,27 @@ npm run migrate:json
 - РћРіСЂР°РЅРёС‡СЊС‚Рµ CORS СЃРїРёСЃРєРѕРј РґРѕРјРµРЅРѕРІ С‡РµСЂРµР· `CORS_ORIGINS` РІ `.env`.
 - РџР°СЂР°РјРµС‚СЂС‹ РїСѓР»Р° (`PG_POOL_MAX`, `PG_IDLE_TIMEOUT`, `PG_CONNECTION_TIMEOUT`) РІС‹РЅРµСЃРµРЅС‹ РІ `.env`.
 - РџСЂРё РґРµРїР»РѕРµ РІ РѕР±Р»Р°РєРѕ РІРєР»СЋС‡Р°Р№С‚Рµ SSL (`DATABASE_SSL=verify` РёР»Рё `true`).
+## Telegram ??????????????????
+1. ???????? бота ? BotFather ? ???????? `TG_BOT_TOKEN`/`TG_BOT_USERNAME`.
+2. В `backend/.env` добавить:
+   ```env
+   TG_BOT_TOKEN=...
+   TG_BOT_USERNAME=...
+   TG_BOT_INTERNAL_SECRET=<случайный_секрет>
+   SITE_URL=http://localhost:5173
+   API_BASE=http://localhost:8787
+   ```
+   В `frontend/.env`: `VITE_TG_BOT_USERNAME=<username без @>`.
+3. Запуск Python-бота (`bot/main.py`):
+   ```bash
+   cd bot
+   python -m venv .venv
+   # Windows
+   .\.venv\Scripts\activate
+   # macOS/Linux
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   python main.py
+   ```
+   Используются переменные окружения `TG_BOT_TOKEN`, `TG_BOT_INTERNAL_SECRET`, `API_BASE`, `SITE_URL`.
+4. На страницах входа/регистрации доступен виджет "????? через Telegram" и кнопка "???????? ?????...", backend ручки: `/api/auth/tg_verify`, `/api/auth/tg_init`, `/api/auth/tg_poll`, `/api/auth/tg_claim`.

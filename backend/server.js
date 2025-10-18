@@ -111,6 +111,25 @@ const statusSchema = z
     message: 'INVALID_STATUS'
   });
 
+const telegramWidgetSchema = z.object({
+  id: z.union([z.string(), z.number()]),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  username: z.string().optional(),
+  photo_url: z.string().url().optional(),
+  auth_date: z.union([z.string(), z.number()]),
+  hash: z.string()
+});
+
+const telegramClaimSchema = z.object({
+  nonce: z.string().min(16).max(256),
+  tg_id: z.union([z.string(), z.number()]),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  username: z.string().optional(),
+  phone: z.string().optional()
+});
+
 function parseBody(schema, payload) {
   const result = schema.safeParse(payload ?? {});
   if (!result.success) {
@@ -194,6 +213,163 @@ async function fetchUserById(id) {
   return rows[0] ?? null;
 }
 
+async function fetchUserByTelegramId(telegramId) {
+  const { rows } = await query(
+    `SELECT ${BASE_USER_FIELDS}
+     FROM app_users
+     WHERE telegram_id = $1
+     LIMIT 1`,
+    [telegramId]
+  );
+  return rows[0] ?? null;
+}
+
+function mapTelegram(row) {
+  if (!row?.telegram_id) {
+    return null;
+  }
+  return {
+    id: row.telegram_id,
+    username: row.telegram_username ?? undefined,
+    first_name: row.telegram_first_name ?? undefined,
+    last_name: row.telegram_last_name ?? undefined,
+    phone: row.telegram_phone ?? null
+  };
+}
+
+function presentUser(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    isAdmin: !!row.is_admin,
+    cover: row.cover ?? null,
+    ordered: !!row.ordered,
+    status: row.status ?? null,
+    createdAt: row.created_at,
+    telegram: mapTelegram(row)
+  };
+}
+
+function tokenPayload(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    isAdmin: !!row.is_admin
+  };
+}
+
+function issueAuthResponse(res, row, status = 200) {
+  const token = signToken(tokenPayload(row));
+  res.cookie('fate_token', token, cookieOpts());
+  return res.status(status).json(presentUser(row));
+}
+
+function cleanupExpiredLogins() {
+  const now = Date.now();
+  for (const [nonce, entry] of pendingLogins) {
+    if (now - entry.ts > TELEGRAM_NONCE_TTL_MS) {
+      pendingLogins.delete(nonce);
+    }
+  }
+}
+
+function verifyTelegramAuth(auth) {
+  if (!TELEGRAM_HASH_SECRET) {
+    return false;
+  }
+  if (!auth || typeof auth !== 'object') {
+    return false;
+  }
+  const hash = typeof auth.hash === 'string' ? auth.hash : '';
+  if (!hash) {
+    return false;
+  }
+  const dataPairs = Object.entries(auth)
+    .filter(([key, value]) => key !== 'hash' && value !== undefined && value !== null)
+    .map(([key, value]) => `${key}=${value}`)
+    .sort();
+  const dataCheckString = dataPairs.join('\n');
+
+  const hmac = crypto.createHmac('sha256', TELEGRAM_HASH_SECRET);
+  const calculated = hmac.update(dataCheckString).digest();
+
+  let provided;
+  try {
+    provided = Buffer.from(hash, 'hex');
+  } catch {
+    return false;
+  }
+  if (provided.length !== calculated.length) {
+    return false;
+  }
+  if (!crypto.timingSafeEqual(provided, calculated)) {
+    return false;
+  }
+
+  const authDateRaw = auth.auth_date ?? auth.authDate;
+  const authDate = Number.parseInt(String(authDateRaw ?? ''), 10);
+  if (!Number.isFinite(authDate)) {
+    return false;
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (authDate > now + 60) {
+    return false;
+  }
+  if (now - authDate > TELEGRAM_AUTH_MAX_AGE) {
+    return false;
+  }
+  return true;
+}
+
+async function findOrCreateUserFromTelegram(tg, { phone } = {}) {
+  if (!tg || tg.id === undefined || tg.id === null) {
+    throw new Error('TELEGRAM_ID_REQUIRED');
+  }
+  const telegramId = String(tg.id);
+  let user = await fetchUserByTelegramId(telegramId);
+  const username = tg.username ? tg.username.trim() || null : null;
+  const firstName = tg.first_name ? tg.first_name.trim() || null : null;
+  const lastName = tg.last_name ? tg.last_name.trim() || null : null;
+
+  if (!user) {
+    const displayNameParts = [firstName, lastName].filter(Boolean);
+    const displayName = displayNameParts.length
+      ? displayNameParts.join(' ')
+      : username
+        ? `@${username}`
+        : `Telegram user ${telegramId}`;
+    const email = `tg${telegramId}@telegram.local`;
+    const randomPass = crypto.randomBytes(32).toString('hex');
+    const passHash = await bcrypt.hash(randomPass, 12);
+    const id = nanoid();
+    const { rows } = await query(
+      `INSERT INTO app_users (
+         id, name, email, pass_hash,
+         telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING ${BASE_USER_FIELDS}`,
+      [id, displayName, email, passHash, telegramId, username, firstName, lastName, phone ?? null]
+    );
+    user = rows[0];
+  } else {
+    const { rows } = await query(
+      `UPDATE app_users
+       SET telegram_username = $2,
+           telegram_first_name = $3,
+           telegram_last_name = $4,
+           telegram_phone = COALESCE($5, telegram_phone)
+       WHERE id = $1
+       RETURNING ${BASE_USER_FIELDS}`,
+      [user.id, username, firstName, lastName, phone ?? null]
+    );
+    user = rows[0];
+  }
+  return user;
+}
+
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
@@ -204,13 +380,15 @@ app.use(
       useDefaults: true,
       directives: {
         'default-src': ["'self'"],
-        'script-src': ["'self'"],
+        'script-src': ["'self'", 'https://telegram.org'],
         'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         'font-src': ["'self'", 'https://fonts.gstatic.com'],
-        'img-src': ["'self'", 'data:'],
+        'img-src': ["'self'", 'data:', 'https://telegram.org'],
         'object-src': ["'none'"],
         'base-uri': ["'self'"],
-        'frame-ancestors': ["'none'"]
+        'frame-ancestors': ["'none'"],
+        'frame-src': ["'self'", 'https://oauth.telegram.org'],
+        'connect-src': ["'self'", 'https://oauth.telegram.org']
       }
     },
     referrerPolicy: { policy: 'no-referrer' }
@@ -246,6 +424,13 @@ const authLimiter = rateLimit({
 const writeLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 300,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const tgPollLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 180,
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -287,23 +472,11 @@ app.post(
     const { rows } = await query(
       `INSERT INTO app_users (id, name, email, pass_hash)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, name, email, is_admin`,
+       RETURNING ${BASE_USER_FIELDS}`,
       [id, name, normalizedEmail, passHash]
     );
     const user = rows[0];
-    const token = signToken({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      isAdmin: !!user.is_admin
-    });
-    res.cookie('fate_token', token, cookieOpts());
-    return res.status(201).json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      isAdmin: !!user.is_admin
-    });
+    return issueAuthResponse(res, user, 201);
   })
 );
 
@@ -321,19 +494,7 @@ app.post(
     if (!ok) {
       return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
     }
-    const token = signToken({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      isAdmin: !!user.is_admin
-    });
-    res.cookie('fate_token', token, cookieOpts());
-    return res.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      isAdmin: !!user.is_admin
-    });
+    return issueAuthResponse(res, user);
   })
 );
 
@@ -347,29 +508,129 @@ app.post(
     }
     const normalizedEmail = sanitizeEmail(email);
     const user = await fetchUserByEmail(normalizedEmail);
+      if (!user) {
+        return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
+      }
+      const ok = await bcrypt.compare(password, user.pass_hash);
+      if (!ok) {
+        return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
+      }
+      if (!user.is_admin) {
+        await query('UPDATE app_users SET is_admin = TRUE WHERE id = $1', [user.id]);
+        user.is_admin = true;
+      }
+      return issueAuthResponse(res, user);
+    })
+  );
+
+app.post(
+  '/api/auth/tg_verify',
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    if (!TELEGRAM_HASH_SECRET) {
+      return res.status(503).json({ error: 'TELEGRAM_AUTH_DISABLED' });
+    }
+    if (!verifyTelegramAuth(req.body ?? {})) {
+      return res.status(401).json({ error: 'INVALID_TELEGRAM_SIGNATURE' });
+    }
+    const data = parseBody(telegramWidgetSchema, req.body);
+    const user = await findOrCreateUserFromTelegram({
+      id: data.id,
+      username: data.username,
+      first_name: data.first_name,
+      last_name: data.last_name
+    });
+    return issueAuthResponse(res, user);
+  })
+);
+
+app.post(
+  '/api/auth/tg_init',
+  authLimiter,
+  asyncHandler(async (_req, res) => {
+    if (!TG_BOT_USERNAME) {
+      return res.status(503).json({ error: 'TELEGRAM_AUTH_DISABLED' });
+    }
+    cleanupExpiredLogins();
+    let nonce;
+    do {
+      nonce = crypto.randomBytes(32).toString('hex');
+    } while (pendingLogins.has(nonce));
+    pendingLogins.set(nonce, { userId: null, ts: Date.now(), consumed: false });
+    res.json({
+      nonce,
+      tme: `https://t.me/${TG_BOT_USERNAME}?start=${nonce}`,
+      site: SITE_URL,
+      api: API_BASE
+    });
+  })
+);
+
+app.post(
+  '/api/auth/tg_claim',
+  asyncHandler(async (req, res) => {
+    if (!TG_BOT_INTERNAL_SECRET) {
+      return res.status(503).json({ error: 'TELEGRAM_AUTH_DISABLED' });
+    }
+    const secretHeader = req.headers['x-tg-bot-secret'];
+    if (secretHeader !== TG_BOT_INTERNAL_SECRET) {
+      return res.status(403).json({ error: 'FORBIDDEN' });
+    }
+    cleanupExpiredLogins();
+    const claim = parseBody(telegramClaimSchema, req.body);
+    const nonce = claim.nonce;
+    const entry = pendingLogins.get(nonce);
+    if (!entry) {
+      return res.status(404).json({ error: 'NONCE_NOT_FOUND' });
+    }
+    if (Date.now() - entry.ts > TELEGRAM_NONCE_TTL_MS) {
+      pendingLogins.delete(nonce);
+      return res.status(410).json({ error: 'NONCE_EXPIRED' });
+    }
+    const phone = claim.phone ? String(claim.phone).trim() || null : undefined;
+    const user = await findOrCreateUserFromTelegram(
+      {
+        id: claim.tg_id,
+        username: claim.username,
+        first_name: claim.first_name,
+        last_name: claim.last_name
+      },
+      { phone }
+    );
+    entry.userId = user.id;
+    entry.ts = Date.now();
+    entry.consumed = false;
+    res.json({ ok: true });
+  })
+);
+
+app.get(
+  '/api/auth/tg_poll',
+  tgPollLimiter,
+  asyncHandler(async (req, res) => {
+    const nonce = typeof req.query?.nonce === 'string' ? req.query.nonce : '';
+    if (!nonce) {
+      return res.status(400).json({ error: 'NONCE_REQUIRED' });
+    }
+    cleanupExpiredLogins();
+    const entry = pendingLogins.get(nonce);
+    if (!entry) {
+      return res.json({ ready: false });
+    }
+    if (!entry.userId) {
+      return res.json({ ready: false });
+    }
+    if (entry.consumed) {
+      return res.json({ ready: false });
+    }
+    entry.consumed = true;
+    entry.ts = Date.now();
+    const user = await fetchUserById(entry.userId);
     if (!user) {
-      return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
+      pendingLogins.delete(nonce);
+      return res.status(404).json({ error: 'NOT_FOUND' });
     }
-    const ok = await bcrypt.compare(password, user.pass_hash);
-    if (!ok) {
-      return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
-    }
-    if (!user.is_admin) {
-      await query('UPDATE app_users SET is_admin = TRUE WHERE id = $1', [user.id]);
-    }
-    const token = signToken({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      isAdmin: true
-    });
-    res.cookie('fate_token', token, cookieOpts());
-    return res.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      isAdmin: true
-    });
+    return issueAuthResponse(res, user);
   })
 );
 
@@ -388,23 +649,18 @@ app.get(
     }
     const { rows } = await query('SELECT COUNT(*)::int AS count FROM answers WHERE user_id = $1', [
       user.id
-    ]);
-    const answersCount = Number(rows[0]?.count ?? 0);
-    const status = user.status ?? null;
-    const statusLabel = status ? STATUS_LABELS[status] ?? null : null;
-    res.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      isAdmin: !!user.is_admin,
-      cover: user.cover ?? null,
-      ordered: !!user.ordered,
-      status,
-      statusLabel,
-      answersCount
-    });
-  })
-);
+      ]);
+      const answersCount = Number(rows[0]?.count ?? 0);
+      const status = user.status ?? null;
+      const statusLabel = status ? STATUS_LABELS[status] ?? null : null;
+      const payload = presentUser(user);
+      res.json({
+        ...payload,
+        statusLabel,
+        answersCount
+      });
+    })
+  );
 
 app.get(
   '/api/questions',
@@ -501,6 +757,11 @@ app.get(
          u.cover,
          u.ordered,
          u.status,
+         u.telegram_id,
+         u.telegram_username,
+         u.telegram_first_name,
+         u.telegram_last_name,
+         u.telegram_phone,
          u.created_at,
          COALESCE(a.answers_count, 0) AS answers_count,
          COALESCE(q.questions_count, 0) AS questions_count
@@ -519,16 +780,9 @@ app.get(
     );
     res.json(
       rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        email: row.email,
-        isAdmin: !!row.is_admin,
-        cover: row.cover ?? null,
-        ordered: !!row.ordered,
-        status: row.status ?? null,
+        ...presentUser(row),
         answersCount: Number(row.answers_count ?? 0),
-        questionsCount: Number(row.questions_count ?? 0),
-        createdAt: row.created_at
+        questionsCount: Number(row.questions_count ?? 0)
       }))
     );
   })
@@ -557,22 +811,16 @@ app.get(
        ORDER BY position ASC`,
       [user.id]
     );
-    res.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      isAdmin: !!user.is_admin,
-      cover: user.cover ?? null,
-      ordered: !!user.ordered,
-      status: user.status ?? null,
-      answers: answers.rows.map((row) => ({
-        questionIndex: row.question_index,
-        text: row.answer_text,
-        createdAt: row.created_at
-      })),
-      questions: questions.rows.map((row) => row.text),
-      createdAt: user.created_at
-    });
+      const payload = presentUser(user);
+      res.json({
+        ...payload,
+        answers: answers.rows.map((row) => ({
+          questionIndex: row.question_index,
+          text: row.answer_text,
+          createdAt: row.created_at
+        })),
+        questions: questions.rows.map((row) => row.text)
+      });
   })
 );
 
