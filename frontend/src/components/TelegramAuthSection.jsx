@@ -1,13 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import TelegramLoginButton from './TelegramLoginButton.jsx';
-import { useAuth } from '../shared/AuthContext.jsx';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import TelegramLoginButton from "./TelegramLoginButton.jsx";
+import { useAuth } from "../shared/AuthContext.jsx";
 
 export default function TelegramAuthSection() {
   const botUsername = import.meta.env.VITE_TG_BOT_USERNAME;
   const { setUser } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
   const pollRef = useRef(null);
   const lastNonceRef = useRef(null);
 
@@ -30,7 +30,7 @@ export default function TelegramAuthSection() {
   const handleSuccess = useCallback(
     (profile) => {
       setUser(profile);
-      window.location.href = '/dashboard';
+      window.location.href = "/dashboard";
     },
     [setUser]
   );
@@ -40,11 +40,11 @@ export default function TelegramAuthSection() {
       pollRef.current = window.setInterval(async () => {
         try {
           const response = await fetch(`/api/auth/tg_poll?nonce=${nonce}`, {
-            credentials: 'include'
+            credentials: "include",
           });
           if (!response.ok) {
             if (response.status === 404) {
-              throw new Error('NONCE_NOT_FOUND');
+              throw new Error("NONCE_NOT_FOUND");
             }
             return;
           }
@@ -57,10 +57,10 @@ export default function TelegramAuthSection() {
             handleSuccess(data);
           }
         } catch (err) {
-          console.error('Telegram poll error', err);
+          console.error("Telegram poll error", err);
           stopPolling();
-          setStatus('');
-          setError('Connection with Telegram was lost. Please try again.');
+          setStatus("");
+          setError("Связь с Telegram потеряна. Попробуйте ещё раз.");
           setLoading(false);
         }
       }, 2500);
@@ -71,32 +71,32 @@ export default function TelegramAuthSection() {
   const startBotFlow = useCallback(async () => {
     if (!botUsername) return;
     stopPolling();
-    setError('');
-    setStatus('Waiting for confirmation in Telegram...');
+    setError("");
+    setStatus("Ждём подтверждения в Telegram...");
     setLoading(true);
     try {
-      const response = await fetch('/api/auth/tg_init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({})
+      const response = await fetch("/api/auth/tg_init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
       });
       if (!response.ok) {
         throw new Error(`INIT_${response.status}`);
       }
       const data = await response.json();
       if (!data?.nonce) {
-        throw new Error('MISSING_NONCE');
+        throw new Error("MISSING_NONCE");
       }
       lastNonceRef.current = data.nonce;
       if (data.tme) {
-        window.open(data.tme, '_blank', 'noopener');
+        window.open(data.tme, "_blank", "noopener");
       }
       pollLogin(data.nonce);
     } catch (err) {
-      console.error('Telegram init error', err);
-      setError('Failed to open Telegram. Please try again.');
-      setStatus('');
+      console.error("Telegram init error", err);
+      setError("Не удалось открыть Telegram. Попробуйте ещё раз.");
+      setStatus("");
       setLoading(false);
       stopPolling();
     }
@@ -110,7 +110,7 @@ export default function TelegramAuthSection() {
     <div className="space-y-3">
       <TelegramLoginButton onSuccess={handleSuccess} />
       <div className="text-center text-sm text-muted">
-        or continue through the Fate Telegram bot
+        или войдите через бота Fate в Telegram
       </div>
       <button
         type="button"
@@ -118,12 +118,10 @@ export default function TelegramAuthSection() {
         onClick={startBotFlow}
         disabled={loading}
       >
-        {loading ? 'Awaiting confirmation...' : 'Open the bot for login'}
+        {loading ? "Ждём подтверждения..." : "Открыть бота для входа"}
       </button>
       {status && <div className="text-sm text-muted text-center">{status}</div>}
       {error && <div className="text-sm text-red-600 text-center">{error}</div>}
     </div>
   );
 }
-
-

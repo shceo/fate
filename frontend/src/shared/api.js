@@ -17,6 +17,6 @@ export async function apiPost(url, body) {
     credentials: 'include',
     body: JSON.stringify(body || {})
   });
-  if (!r.ok) throw new Error('Request failed');
+  if (!r.ok) throw new Error('Запрос не выполнен.');
   return r.json();
 }

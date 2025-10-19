@@ -1,9 +1,9 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
 import Progress from "../components/Progress.jsx";
 import QuestionsEmptyState from "../components/QuestionsEmptyState.jsx";
-import { Link } from "react-router-dom";
 import { useAuth } from "../shared/AuthContext.jsx";
 import { useQuestions } from "../shared/QuestionsContext.jsx";
 
@@ -25,7 +25,7 @@ export default function Dashboard() {
 
   const showToast = (message) => {
     setToast(message);
-    window.setTimeout(() => setToast(null), 2000);
+    window.setTimeout(() => setToast(null), 2200);
   };
 
   const handleSave = async () => {
@@ -36,7 +36,7 @@ export default function Dashboard() {
       showToast("Ответы сохранены");
     } catch (error) {
       console.error("Failed to save answers", error);
-      showToast("Не удалось сохранить. Попробуйте позже.");
+      showToast("Не удалось сохранить ответы. Попробуйте ещё раз.");
     } finally {
       setBusy(false);
     }
@@ -49,7 +49,7 @@ export default function Dashboard() {
     : "Добро пожаловать";
   const progressLabel = totalCount
     ? `${answeredCount} из ${totalCount} вопросов`
-    : "Нет вопросов";
+    : "Вопросов пока нет";
 
   return (
     <div>
@@ -58,7 +58,7 @@ export default function Dashboard() {
       {toast && (
         <div className="fixed inset-0 z-[60] grid place-items-center pointer-events-none">
           <div className="pointer-events-auto card-glass px-6 py-4 text-center shadow-soft">
-            <div className="font-serif text-lg">⟡ {toast}</div>
+            <div className="font-serif text-lg">{toast}</div>
           </div>
         </div>
       )}
@@ -69,8 +69,9 @@ export default function Dashboard() {
             {greeting}
           </h2>
           <p className="text-muted">
-            Здесь собраны все вопросы вашего проекта. Заполняйте в удобном
-            темпе — ответы можно редактировать в любой момент.
+            Здесь вы можете заполнять ответы на вопросы интервью и отслеживать
+            прогресс книги. Меняйте ответы в любое время — все изменения можно
+            сохранить одной кнопкой.
           </p>
           <div className="mt-3 font-semibold">Прогресс</div>
           <Progress value={progress} />
@@ -81,7 +82,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-2">
               <div className="cover bg-gradient-to-br from-blush to-lav w-[84px] min-w-[84px]">
                 <div className="meta">
-                  {user?.cover ?? "Персональная обложка"}
+                  {user?.cover ?? "Обложка не выбрана"}
                 </div>
               </div>
               <Link className="btn" to="/covers">
@@ -93,9 +94,9 @@ export default function Dashboard() {
 
         <main className="paper p-4">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-            <h3 className="font-serif text-xl">Вопросы и ответы</h3>
+            <h3 className="font-serif text-xl">Ваши вопросы и ответы</h3>
             <Link className="btn" to="/qa">
-              Перейти в фокус-режим
+              Перейти к интервью
             </Link>
           </div>
 
@@ -118,7 +119,7 @@ export default function Dashboard() {
                   </div>
                   <textarea
                     className="input min-h-[140px]"
-                    placeholder="Запишите здесь ответ"
+                    placeholder="Напишите ответ здесь"
                     value={answers[idx] ?? ""}
                     onChange={(e) => updateAnswer(idx, e.target.value)}
                     disabled={disabled}
@@ -139,7 +140,7 @@ export default function Dashboard() {
               Сохранить ответы
             </button>
             <Link className="btn" to="/qa">
-              Ответить по одному вопросу
+              К вопросам интервью
             </Link>
           </div>
         </main>

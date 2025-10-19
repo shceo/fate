@@ -73,4 +73,31 @@
   .topbar{ position:sticky; top:0; z-index:40; backdrop-filter:saturate(140%) blur(8px); background-color:rgba(250,247,242,.75); border-bottom:1px solid var(--line); }
   .hairline{ height:1px; background:var(--line); border:none; margin:1rem 0 }
   .status{ display:flex; align-items:center; gap:.6rem; padding:.8rem; background:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,.4)); border:1px solid var(--line); border-radius:12px; }
+  .password-field{ position:relative; }
+  .password-toggle{
+    position:absolute;
+    top:50%;
+    right:.75rem;
+    transform:translateY(-50%);
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:2rem;
+    height:2rem;
+    border-radius:999px;
+    border:1px solid transparent;
+    background:rgba(255,255,255,.6);
+    color:#6f6457;
+    cursor:pointer;
+    transition:.2s ease;
+    padding:0;
+  }
+  .password-toggle:hover{
+    background:rgba(255,255,255,.85);
+    box-shadow:var(--shadow-tiny);
+  }
+  .password-toggle__icon{
+    width:1.15rem;
+    height:1.15rem;
+  }
 }

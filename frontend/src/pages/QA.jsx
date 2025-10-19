@@ -33,7 +33,7 @@ export default function QA() {
 
   const showToast = (message) => {
     setToast(message);
-    window.setTimeout(() => setToast(null), 2000);
+    window.setTimeout(() => setToast(null), 2200);
   };
 
   const persistAnswers = async (withSuccessToast = true) => {
@@ -45,7 +45,7 @@ export default function QA() {
       if (withSuccessToast) showToast("Ответы сохранены");
     } catch (error) {
       console.error("Failed to save answers", error);
-      showToast("Не удалось сохранить. Попробуйте позже.");
+      showToast("Не удалось сохранить ответы. Попробуйте ещё раз.");
       ok = false;
     } finally {
       setBusy(false);
@@ -66,10 +66,10 @@ export default function QA() {
     try {
       setBusy(true);
       await apiPost("/api/complete", {});
-      location.href = "/complete";
+      window.location.href = "/complete";
     } catch (error) {
       console.error("Failed to complete questionnaire", error);
-      showToast("Не удалось завершить. Попробуйте снова.");
+      showToast("Не удалось завершить интервью. Попробуйте позже.");
     } finally {
       setBusy(false);
     }
@@ -90,7 +90,7 @@ export default function QA() {
       {toast && (
         <div className="fixed inset-0 z-[60] grid place-items-center pointer-events-none">
           <div className="pointer-events-auto card-glass px-6 py-4 text-center shadow-soft">
-            <div className="font-serif text-lg">⟡ {toast}</div>
+            <div className="font-serif text-lg">{toast}</div>
           </div>
         </div>
       )}
@@ -99,11 +99,11 @@ export default function QA() {
         <div className="paper w-[min(820px,94vw)] p-6">
           <div className="flex justify-between items-center flex-wrap gap-3 mb-4">
             <Link className="btn" to="/dashboard">
-              Вернуться к обычному режиму
+              Вернуться в личный кабинет
             </Link>
             {totalCount > 0 && (
               <div className="text-muted text-sm">
-                Отвечено {answeredCount} из {totalCount}
+                Ответов: {answeredCount} из {totalCount}
               </div>
             )}
           </div>
@@ -121,7 +121,7 @@ export default function QA() {
                   Вопрос {index + 1} из {questions.length}
                 </span>
                 <span>
-                  Вы можете вернуться и поправить ответ в любой момент
+                  Сохраняйте ответы по мере заполнения — вы всегда можете вернуться назад.
                 </span>
               </div>
 
@@ -133,7 +133,7 @@ export default function QA() {
 
               <textarea
                 className="input min-h-[220px] text-[1.05rem] mt-3"
-                placeholder="Запишите свои мысли, воспоминания или детали, которые хотите сохранить"
+                placeholder="Расскажите всё, что считаете важным. Можно записывать тезисы или подробную историю."
                 value={value}
                 onChange={(e) => updateAnswer(index, e.target.value)}
                 disabled={disabled}
@@ -153,14 +153,16 @@ export default function QA() {
                     onClick={() => persistAnswers(true)}
                     disabled={disabled}
                   >
-                    Сохранить
+                    Сохранить ответы
                   </button>
                   <button
                     className="btn primary"
                     onClick={handleNext}
                     disabled={disabled}
                   >
-                    {index < questions.length - 1 ? "Далее" : "Завершить"}
+                    {index < questions.length - 1
+                      ? "Далее"
+                      : "Завершить интервью"}
                   </button>
                 </div>
               </div>

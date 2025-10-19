@@ -16,7 +16,11 @@ function NavItem({ to, end, icon, children }) {
         ].join(" ")
       }
     >
-      <span className="text-[1.1rem]">{icon}</span>
+      {icon ? (
+        <span className="text-[1.1rem]" aria-hidden="true">
+          {icon}
+        </span>
+      ) : null}
       <span className="font-medium">{children}</span>
     </NavLink>
   );
@@ -28,17 +32,16 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-[radial-gradient(90rem_60rem_at_-10%_-10%,#F1E6D6_0%,transparent_60%),_radial-gradient(80rem_60rem_at_110%_10%,#F7EDE4_0%,transparent_55%),_#F5EFE6]">
       <div className="container mx-auto px-4 py-6 grid gap-6 md:grid-cols-[260px_1fr]">
-        {/* Sidebar */}
         <aside className="paper p-4 h-min sticky top-6">
-          <div className="font-serif text-[1.5rem] mb-3">Fate Admin</div>
+          <div className="font-serif text-[1.5rem] mb-3">Fate - Админка</div>
           <nav className="space-y-2">
-            <NavItem to="/admin" end icon="👥">
-              Пользователи
+            <NavItem to="/admin" end icon="[K]">
+              Клиенты
             </NavItem>
-            <NavItem to="/admin/templates" icon="📚">
+            <NavItem to="/admin/templates" icon="[Ш]">
               Шаблоны
             </NavItem>
-            <NavItem to="/admin/settings" icon="⚙️">
+            <NavItem to="/admin/settings" icon="[Н]">
               Настройки
             </NavItem>
           </nav>
@@ -48,7 +51,6 @@ export default function AdminLayout() {
           </button>
         </aside>
 
-        {/* Content */}
         <main className="space-y-4">
           <Outlet />
         </main>

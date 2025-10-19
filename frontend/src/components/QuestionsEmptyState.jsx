@@ -4,10 +4,10 @@ export default function QuestionsEmptyState() {
   return (
     <div className="text-center">
       <div className="font-serif text-[clamp(1.4rem,3.8vw,2rem)]">
-        Вопросов пока нет — мы сообщим, как только появятся новые.
+        Пока вопросов нет — скоро редактор добавит новый список.
       </div>
       <div className="text-muted mt-1">
-        Вы сможете вернуться сюда позже, чтобы продолжить работу над историей.
+        Проверьте раздел позже или свяжитесь с куратором, если нужны дополнительные материалы.
       </div>
     </div>
   );

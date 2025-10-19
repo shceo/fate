@@ -1,25 +1,26 @@
-import React, { useState } from 'react';
-import Header from '../components/Header.jsx';
-import Footer from '../components/Footer.jsx';
-import TelegramAuthSection from '../components/TelegramAuthSection.jsx';
-import { useAuth } from '../shared/AuthContext.jsx';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import Header from "../components/Header.jsx";
+import Footer from "../components/Footer.jsx";
+import TelegramAuthSection from "../components/TelegramAuthSection.jsx";
+import PasswordInput from "../components/PasswordInput.jsx";
+import { useAuth } from "../shared/AuthContext.jsx";
+import { useNavigate } from "react-router-dom";
 
 export default function Register() {
   const { register } = useAuth();
   const nav = useNavigate();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [err, setErr] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
 
   const onSubmit = async (e) => {
     e.preventDefault();
     try {
-      await register(name, email, password);
-      nav('/dashboard');
+      await register(name.trim(), email.trim(), password);
+      nav("/dashboard");
     } catch {
-      setErr('Could not create the account. Please try again.');
+      setErr("Не удалось создать аккаунт. Попробуйте ещё раз.");
     }
   };
 
@@ -35,44 +36,57 @@ export default function Register() {
               </span>
             </div>
           </div>
-          <h1 className="font-serif text-[clamp(1.6rem,3vw,2.2rem)]">Create your Fate profile</h1>
+          <h1 className="font-serif text-[clamp(1.6rem,3vw,2.2rem)]">
+            Создайте профиль Fate
+          </h1>
           <p className="text-muted">
-            Fill in the form to create your account. You can edit your details later in the dashboard.
+            Заполните форму, чтобы зарегистрироваться. Вы сможете изменить
+            данные позже в личном кабинете.
           </p>
           <form onSubmit={onSubmit} className="space-y-3">
             <div>
-              <label className="block mb-1">Name</label>
+              <label className="block mb-1" htmlFor="register-name">
+                ФИО
+              </label>
               <input
+                id="register-name"
                 className="input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
+                placeholder="Иван Иванов"
+                autoComplete="name"
               />
             </div>
             <div>
-              <label className="block mb-1">Email</label>
+              <label className="block mb-1" htmlFor="register-email">
+                Электронная почта
+              </label>
               <input
+                id="register-email"
                 className="input"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="ivan@example.com"
+                autoComplete="email"
               />
             </div>
             <div>
-              <label className="block mb-1">Password</label>
-              <input
-                className="input"
-                type="password"
+              <label className="block mb-1" htmlFor="register-password">
+                Пароль
+              </label>
+              <PasswordInput
+                id="register-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Choose a secure password"
+                placeholder="Придумайте надёжный пароль"
+                autoComplete="new-password"
               />
             </div>
             {err && <div className="text-red-600">{err}</div>}
             <div className="flex gap-2 items-center pt-1">
               <button className="btn primary" type="submit">
-                Create account
+                Создать аккаунт
               </button>
             </div>
           </form>
