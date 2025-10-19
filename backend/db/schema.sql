@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS app_users (
   ordered BOOLEAN NOT NULL DEFAULT FALSE,
   status TEXT CHECK (
     status IN ('in_review', 'in_design', 'printing', 'ready', 'shipped', 'delivered')
-  )
+  ),
+  interview_locked BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS app_users_email_lower_key
@@ -45,6 +46,8 @@ ALTER TABLE app_users
   ADD COLUMN IF NOT EXISTS telegram_last_name TEXT;
 ALTER TABLE app_users
   ADD COLUMN IF NOT EXISTS telegram_phone TEXT;
+ALTER TABLE app_users
+  ADD COLUMN IF NOT EXISTS interview_locked BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE UNIQUE INDEX IF NOT EXISTS app_users_telegram_id_key
   ON app_users (telegram_id)

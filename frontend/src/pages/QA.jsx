@@ -1,13 +1,16 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+﻿import React, { useEffect, useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
 import Progress from "../components/Progress.jsx";
 import QuestionsEmptyState from "../components/QuestionsEmptyState.jsx";
 import { apiPost } from "../shared/api.js";
+import { useAuth } from "../shared/AuthContext.jsx";
 import { useQuestions } from "../shared/QuestionsContext.jsx";
 
 export default function QA() {
+  const navigate = useNavigate();
+  const { refreshUser, setUser } = useAuth();
   const {
     questions,
     answers,
@@ -18,6 +21,7 @@ export default function QA() {
     saveAnswers,
     loaded,
     loading,
+    interviewLocked,
   } = useQuestions();
   const [index, setIndex] = useState(0);
   const [toast, setToast] = useState(null);
@@ -62,13 +66,30 @@ export default function QA() {
       return;
     }
 
+    const confirmed = window.confirm(
+      "Вы действительно хотите завершить вопросы? После подтверждения ответы нельзя будет изменить."
+    );
+    if (!confirmed) return;
+
     const saved = await persistAnswers(false);
     if (!saved) return;
 
     try {
       setBusy(true);
-      await apiPost("/api/complete", {});
-      window.location.href = "/complete";
+      const result = await apiPost("/api/complete", {});
+      if (result && typeof result === "object") {
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: result.status ?? prev.status ?? null,
+                statusLabel: result.statusLabel ?? prev.statusLabel ?? null,
+              }
+            : prev
+        );
+      }
+      await refreshUser();
+      navigate("/complete", { replace: true });
     } catch (error) {
       console.error("Failed to complete questionnaire", error);
       showToast("Не удалось завершить вопросы. Попробуйте позже.");
@@ -85,6 +106,10 @@ export default function QA() {
   const value = answers[index] ?? "";
   const disabled = busy || loading;
   const currentQuestion = totalCount > 0 ? index + 1 : 0;
+
+  if (!loading && loaded && interviewLocked) {
+    return <Navigate to="/complete" replace />;
+  }
 
   return (
     <div>

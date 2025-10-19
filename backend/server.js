@@ -18,6 +18,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
+
 
 const PROD = process.env.NODE_ENV === 'production';
 const PORT = Number.parseInt(process.env.PORT ?? '8787', 10);
@@ -65,7 +67,8 @@ const TELEGRAM_AUTH_MAX_AGE = 24 * 60 * 60; // 1 day in seconds
 const TELEGRAM_NONCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const pendingLogins = new Map();
 
-const BASE_USER_FIELDS = `id, name, email, is_admin, cover, ordered, status, created_at,
+const BASE_USER_FIELDS = `id, name, email, is_admin, cover, ordered, status,
+  interview_locked, created_at,
   telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone`;
 const USER_WITH_PASS_FIELDS = `${BASE_USER_FIELDS}, pass_hash`;
 
@@ -248,6 +251,7 @@ function presentUser(row) {
     ordered: !!row.ordered,
     status,
     statusLabel: status ? STATUS_LABELS[status] ?? null : null,
+    interviewLocked: !!row.interview_locked,
     createdAt: row.created_at,
     telegram: mapTelegram(row)
   };
@@ -510,20 +514,20 @@ app.post(
     }
     const normalizedEmail = sanitizeEmail(email);
     const user = await fetchUserByEmail(normalizedEmail);
-      if (!user) {
-        return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
-      }
-      const ok = await bcrypt.compare(password, user.pass_hash);
-      if (!ok) {
-        return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
-      }
-      if (!user.is_admin) {
-        await query('UPDATE app_users SET is_admin = TRUE WHERE id = $1', [user.id]);
-        user.is_admin = true;
-      }
-      return issueAuthResponse(res, user);
-    })
-  );
+    if (!user) {
+      return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
+    }
+    const ok = await bcrypt.compare(password, user.pass_hash);
+    if (!ok) {
+      return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
+    }
+    if (!user.is_admin) {
+      await query('UPDATE app_users SET is_admin = TRUE WHERE id = $1', [user.id]);
+      user.is_admin = true;
+    }
+    return issueAuthResponse(res, user);
+  })
+);
 
 app.post(
   '/api/auth/tg_verify',
@@ -658,8 +662,8 @@ app.get(
       ...payload,
       answersCount
     });
-    })
-  );
+  })
+);
 
 app.get(
   '/api/questions',
@@ -679,6 +683,7 @@ app.get(
 app.get(
   '/api/answers',
   authRequired,
+
   asyncHandler(async (req, res) => {
     const { rows } = await query(
       `SELECT question_index, answer_text, created_at
@@ -703,6 +708,11 @@ app.post(
   csrfRequired,
   writeLimiter,
   asyncHandler(async (req, res) => {
+    const me = await fetchUserById(req.user.id);
+    if (me?.interview_locked) {
+      return res.status(403).json({ error: 'INTERVIEW_LOCKED' });
+    }
+
     const { entries } = parseBody(answersSchema, req.body);
     await transaction(async (client) => {
       await client.query('DELETE FROM answers WHERE user_id = $1', [req.user.id]);
@@ -740,16 +750,19 @@ app.post(
   asyncHandler(async (req, res) => {
     const { rows } = await query(
       `UPDATE app_users
-       SET status = COALESCE(status, $2)
+         SET interview_locked = TRUE,
+             status = COALESCE(status, $2)
        WHERE id = $1
-       RETURNING status`,
+       RETURNING status, interview_locked`,
       [req.user.id, 'in_review']
     );
     const status = rows[0]?.status ?? null;
-    const statusLabel = status ? STATUS_LABELS[status] ?? null : null;
-    res.json({ ok: true, status, statusLabel });
+    const statusLabel = status ? (STATUS_LABELS[status] ?? null) : null;
+    const interviewLocked = !!rows[0]?.interview_locked;
+    res.json({ ok: true, status, statusLabel, interviewLocked });
   })
 );
+
 
 app.get(
   '/api/admin/users',
@@ -765,6 +778,7 @@ app.get(
          u.cover,
          u.ordered,
          u.status,
+         u.interview_locked,
          u.telegram_id,
          u.telegram_username,
          u.telegram_first_name,
@@ -819,16 +833,16 @@ app.get(
        ORDER BY position ASC`,
       [user.id]
     );
-      const payload = presentUser(user);
-      res.json({
-        ...payload,
-        answers: answers.rows.map((row) => ({
-          questionIndex: row.question_index,
-          text: row.answer_text,
-          createdAt: row.created_at
-        })),
-        questions: questions.rows.map((row) => row.text)
-      });
+    const payload = presentUser(user);
+    res.json({
+      ...payload,
+      answers: answers.rows.map((row) => ({
+        questionIndex: row.question_index,
+        text: row.answer_text,
+        createdAt: row.created_at
+      })),
+      questions: questions.rows.map((row) => row.text)
+    });
   })
 );
 

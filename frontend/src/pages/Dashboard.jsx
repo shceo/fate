@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { Link } from "react-router-dom";
 import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
@@ -123,17 +123,22 @@ export default function Dashboard() {
               Загружаем информацию...
             </div>
           ) : interviewLocked ? (
-            <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
-              <span className="text-xl" aria-hidden="true">
-                ✅
-              </span>
-              <div>
-                <div className="font-semibold">Ответы отправлены редакции</div>
-                <div className="text-muted">
-                  Мы изучим ваши материалы и свяжемся, если потребуются
-                  уточнения. Следите за статусом проекта в панели слева.
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
+                <span className="text-xl" aria-hidden="true">
+                  ✅
+                </span>
+                <div>
+                  <div className="font-semibold">Ответы отправлены редакции</div>
+                  <div className="text-muted">
+                    Мы изучим ваши материалы и свяжемся, если потребуются
+                    уточнения. Следите за статусом проекта в панели слева.
+                  </div>
                 </div>
               </div>
+              <Link className="btn" to="/complete">
+                Открыть итоговую страницу
+              </Link>
             </div>
           ) : showQuestionsButton ? (
             <div className="space-y-4">
