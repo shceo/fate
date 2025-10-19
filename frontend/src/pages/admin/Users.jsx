@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import ConfirmDialog from "../../components/ConfirmDialog.jsx";
+import { useAuth } from "../../shared/AuthContext.jsx";
+import { apiDelete } from "../../shared/api.js";
 
 function renderTelegram(tg) {
   if (!tg) {
-    return <span className="text-muted text-sm">Нет</span>;
+    return <span className="text-muted text-sm">не подключен</span>;
   }
   const label =
     tg.username && tg.username.length
@@ -48,8 +51,12 @@ function buildSearchString(user) {
 }
 
 export default function Users() {
+  const { user: currentUser } = useAuth();
   const [rows, setRows] = useState([]);
   const [query, setQuery] = useState("");
+  const [dialogUser, setDialogUser] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     fetch("/api/admin/users", { credentials: "include" })
@@ -67,17 +74,68 @@ export default function Users() {
 
   const summary = query.trim().length
     ? `Найдено: ${filteredRows.length} из ${rows.length}`
-    : `Всего клиентов: ${rows.length}`;
+    : `Всего пользователей: ${rows.length}`;
+
+  const openDeleteDialog = (user) => {
+    setDialogUser(user);
+    setDeleteError("");
+  };
+
+  const cancelDelete = () => {
+    if (deleting) return;
+    setDialogUser(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!dialogUser || deleting) return;
+    setDeleteError("");
+    try {
+      setDeleting(true);
+      await apiDelete(`/api/admin/users/${dialogUser.id}`);
+      setRows((prev) => prev.filter((row) => row.id !== dialogUser.id));
+      setDialogUser(null);
+    } catch (error) {
+      console.error("Failed to delete user", error);
+      const code = error?.details?.error;
+      let message = "Не удалось удалить пользователя. Попробуйте позже.";
+      if (code === "CANNOT_DELETE_ADMIN") {
+        message = "Нельзя удалить административный аккаунт.";
+      } else if (code === "CANNOT_DELETE_SELF") {
+        message = "Нельзя удалить собственный аккаунт.";
+      } else if (code === "NOT_FOUND") {
+        message = "Пользователь уже удалён.";
+      }
+      setDeleteError(message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const confirmMessage = dialogUser ? (
+    <div className="space-y-3 text-muted leading-relaxed">
+      <p>
+        {`Удалить аккаунт ${
+          dialogUser.name && dialogUser.name.trim().length
+            ? dialogUser.name
+            : "без имени"
+        } (${dialogUser.email})? Это действие необратимо.`}
+      </p>
+      <p>Будут стерты ответы, вопросы и связанные данные пользователя.</p>
+      {deleteError && (
+        <p className="text-sm text-[#b23a2f]">{deleteError}</p>
+      )}
+    </div>
+  ) : null;
 
   return (
     <div className="paper p-4 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h2 className="font-serif text-xl">Клиенты</h2>
+        <h2 className="font-serif text-xl">Пользователи</h2>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-muted">{summary}</span>
           <input
             className="input w-[260px]"
-            placeholder="Поиск по имени, email, телефону или ID"
+            placeholder="Поиск по имени, email, Telegram или ID"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -87,41 +145,75 @@ export default function Users() {
         <table className="w-full border border-line rounded-[14px] overflow-hidden">
           <thead className="bg-[#fffaf2] text-[#6f6457]">
             <tr>
-              <th className="text-left p-3">ФИО</th>
+              <th className="w-[64px] text-left p-3" aria-label="Действия" />
+              <th className="text-left p-3">Имя</th>
               <th className="text-left p-3">Email</th>
               <th className="text-left p-3">Telegram</th>
               <th className="text-left p-3">Статус заказа</th>
-              <th className="text-left p-3">Ответы</th>
+              <th className="text-left p-3">Ответов</th>
               <th className="text-left p-3">Действия</th>
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((user) => (
-              <tr key={user.id} className="border-t border-line">
-                <td className="p-3">{user.name}</td>
-                <td className="p-3 break-all">{user.email}</td>
-                <td className="p-3">{renderTelegram(user.telegram)}</td>
-                <td className="p-3">
-                  {user.ordered ? "Заказ подтверждён" : "Ожидает подтверждения"}
-                </td>
-                <td className="p-3">{user.answersCount}</td>
-                <td className="p-3">
-                  <Link className="btn" to={`/admin/users/${user.id}`}>
-                    Открыть
-                  </Link>
-                </td>
-              </tr>
-            ))}
+            {filteredRows.map((user) => {
+              const isSelf = currentUser?.id === user.id;
+              const deleteDisabled = user.isAdmin || isSelf;
+              return (
+                <tr key={user.id} className="border-t border-line">
+                  <td className="p-3">
+                    <button
+                      type="button"
+                      className="btn icon-btn danger"
+                      onClick={() => openDeleteDialog(user)}
+                      disabled={deleteDisabled}
+                      title={
+                        deleteDisabled
+                          ? "Удаление недоступно для этого аккаунта"
+                          : "Удалить аккаунт"
+                      }
+                      aria-label={`Удалить ${user.name || "пользователя"}`}
+                    >
+                      🗑️
+                    </button>
+                  </td>
+                  <td className="p-3">{user.name}</td>
+                  <td className="p-3 break-all">{user.email}</td>
+                  <td className="p-3">{renderTelegram(user.telegram)}</td>
+                  <td className="p-3">
+                    {user.ordered ? "заказ подтверждён" : "ожидает подтверждения"}
+                  </td>
+                  <td className="p-3">{user.answersCount}</td>
+                  <td className="p-3">
+                    <Link className="btn" to={`/admin/users/${user.id}`}>
+                      Открыть
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
             {filteredRows.length === 0 && (
               <tr>
-                <td className="p-4 text-center text-muted" colSpan={6}>
-                  Клиенты не найдены. Попробуйте изменить запрос.
+                <td className="p-4 text-center text-muted" colSpan={7}>
+                  Пользователи не найдены. Попробуйте изменить условия поиска.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(dialogUser)}
+        title="Удалить аккаунт?"
+        message={confirmMessage}
+        confirmLabel="Удалить"
+        cancelLabel="Отмена"
+        confirmTone="danger"
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </div>
   );
 }
+

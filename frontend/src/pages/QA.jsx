@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import Header from "../components/Header.jsx";
+import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import Footer from "../components/Footer.jsx";
 import Progress from "../components/Progress.jsx";
 import QuestionsEmptyState from "../components/QuestionsEmptyState.jsx";
@@ -26,6 +27,7 @@ export default function QA() {
   const [index, setIndex] = useState(0);
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (questions.length === 0) {
@@ -59,45 +61,51 @@ export default function QA() {
     return ok;
   };
 
-  const handleNext = async () => {
-    if (questions.length === 0 || busy) return;
-    if (index < questions.length - 1) {
-      setIndex((prev) => Math.min(prev + 1, questions.length - 1));
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Вы действительно хотите завершить вопросы? После подтверждения ответы нельзя будет изменить."
-    );
-    if (!confirmed) return;
-
-    const saved = await persistAnswers(false);
-    if (!saved) return;
-
-    try {
-      setBusy(true);
-      const result = await apiPost("/api/complete", {});
-      if (result && typeof result === "object") {
-        setUser((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: result.status ?? prev.status ?? null,
-                statusLabel: result.statusLabel ?? prev.statusLabel ?? null,
-              }
-            : prev
-        );
-      }
-      await refreshUser();
-      navigate("/complete", { replace: true });
-    } catch (error) {
-      console.error("Failed to complete questionnaire", error);
-      showToast("Не удалось завершить вопросы. Попробуйте позже.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  const handleNext = () => {
+    if (questions.length === 0 || busy) return;
+    if (index < questions.length - 1) {
+      setIndex((prev) => Math.min(prev + 1, questions.length - 1));
+      return;
+    }
+    setCompleteDialogOpen(true);
+  };
+
+  const finalizeCompletion = async () => {
+    if (busy) return;
+    const saved = await persistAnswers(false);
+    if (!saved) return;
+
+    setCompleteDialogOpen(false);
+
+    try {
+      setBusy(true);
+      const result = await apiPost("/api/complete", {});
+      if (result && typeof result === "object") {
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: result.status ?? prev.status ?? null,
+                statusLabel: result.statusLabel ?? prev.statusLabel ?? null,
+              }
+            : prev
+        );
+      }
+      await refreshUser();
+      navigate("/complete", { replace: true });
+    } catch (error) {
+      console.error("Failed to complete questionnaire", error);
+      showToast("?? ??????? ????????? ???????. ?????????? ?????.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelCompletion = () => {
+    if (busy) return;
+    setCompleteDialogOpen(false);
+  };
+
   const handlePrev = () => {
     if (busy) return;
     setIndex((prev) => Math.max(0, prev - 1));
@@ -114,6 +122,17 @@ export default function QA() {
   return (
     <div>
       <Header />
+
+      <ConfirmDialog
+        open={completeDialogOpen}
+        title="Завершить интервью?"
+        message="Вы действительно хотите завершить вопросы? После подтверждения ответы нельзя будет изменить."
+        confirmLabel="Завершить"
+        cancelLabel="Продолжить"
+        busy={busy}
+        onConfirm={finalizeCompletion}
+        onCancel={cancelCompletion}
+      />
 
       {toast && (
         <div className="fixed inset-0 z-[60] grid place-items-center pointer-events-none">

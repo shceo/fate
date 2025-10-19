@@ -846,6 +846,28 @@ app.get(
   })
 );
 
+app.delete(
+  '/api/admin/users/:id',
+  authRequired,
+  adminRequired,
+  csrfRequired,
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    if (req.user.id === req.params.id) {
+      return res.status(400).json({ error: 'CANNOT_DELETE_SELF' });
+    }
+    const user = await fetchUserById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    if (user.is_admin) {
+      return res.status(400).json({ error: 'CANNOT_DELETE_ADMIN' });
+    }
+    await query('DELETE FROM app_users WHERE id = $1', [user.id]);
+    res.json({ ok: true });
+  })
+);
+
 app.post(
   '/api/admin/users/:id/questions',
   authRequired,

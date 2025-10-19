@@ -51,6 +51,27 @@
     color:#fff;
     box-shadow:var(--shadow-soft);
   }
+  .btn.danger{
+    background:linear-gradient(180deg,#f28f82,#e25d4c);
+    border-color:transparent;
+    color:#fff;
+    box-shadow:var(--shadow-soft);
+  }
+  .btn:disabled{
+    opacity:.55;
+    cursor:not-allowed;
+    box-shadow:none;
+    transform:none;
+  }
+  .btn:disabled:hover{
+    box-shadow:none;
+    transform:none;
+  }
+  .icon-btn{
+    width:2.4rem;
+    height:2.4rem;
+    padding:0;
+  }
   .input{
     width:100%;
     padding:.9rem 1rem;
