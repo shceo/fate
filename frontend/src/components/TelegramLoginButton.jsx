@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useAuth } from '../shared/AuthContext.jsx';
 
 export default function TelegramLoginButton({ onSuccess }) {
-  const { setUser } = useAuth();
+  const { setUser, refreshUser } = useAuth();
   const containerRef = useRef(null);
   const botUsername = import.meta.env.VITE_TG_BOT_USERNAME;
 
@@ -23,6 +23,7 @@ export default function TelegramLoginButton({ onSuccess }) {
         }
         const profile = await response.json();
         setUser(profile);
+        await refreshUser();
         if (onSuccess) {
           onSuccess(profile);
         } else {
@@ -38,7 +39,7 @@ export default function TelegramLoginButton({ onSuccess }) {
         delete window.onTelegramAuth;
       }
     };
-  }, [botUsername, onSuccess, setUser]);
+  }, [botUsername, onSuccess, refreshUser, setUser]);
 
   useEffect(() => {
     if (!botUsername || !containerRef.current) {

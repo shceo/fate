@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
@@ -50,12 +50,12 @@ const allowedOrigins = (process.env.CORS_ORIGINS ?? defaultOrigins.join(','))
 const STATUS_VALUES = ['in_review', 'in_design', 'printing', 'ready', 'shipped', 'delivered'];
 const STATUS_SET = new Set(STATUS_VALUES);
 const STATUS_LABELS = {
-  in_review: 'На проверке у Fate',
-  in_design: 'Готовится дизайн',
-  printing: 'Печатается',
-  ready: 'Готов к выдаче',
-  shipped: 'Отправлен',
-  delivered: 'Доставлен'
+  in_review: 'Редакция изучает материалы',
+  in_design: 'Дизайн и вёрстка',
+  printing: 'Печать тиража',
+  ready: 'Готово к выдаче',
+  shipped: 'Отправлено',
+  delivered: 'Доставлено'
 };
 
 const TELEGRAM_HASH_SECRET = TG_BOT_TOKEN
@@ -238,6 +238,7 @@ function mapTelegram(row) {
 }
 
 function presentUser(row) {
+  const status = row.status ?? null;
   return {
     id: row.id,
     name: row.name,
@@ -245,7 +246,8 @@ function presentUser(row) {
     isAdmin: !!row.is_admin,
     cover: row.cover ?? null,
     ordered: !!row.ordered,
-    status: row.status ?? null,
+    status,
+    statusLabel: status ? STATUS_LABELS[status] ?? null : null,
     createdAt: row.created_at,
     telegram: mapTelegram(row)
   };
@@ -649,16 +651,13 @@ app.get(
     }
     const { rows } = await query('SELECT COUNT(*)::int AS count FROM answers WHERE user_id = $1', [
       user.id
-      ]);
-      const answersCount = Number(rows[0]?.count ?? 0);
-      const status = user.status ?? null;
-      const statusLabel = status ? STATUS_LABELS[status] ?? null : null;
-      const payload = presentUser(user);
-      res.json({
-        ...payload,
-        statusLabel,
-        answersCount
-      });
+    ]);
+    const answersCount = Number(rows[0]?.count ?? 0);
+    const payload = presentUser(user);
+    res.json({
+      ...payload,
+      answersCount
+    });
     })
   );
 
@@ -738,9 +737,18 @@ app.post(
   authRequired,
   csrfRequired,
   writeLimiter,
-  (_req, res) => {
-    res.json({ ok: true });
-  }
+  asyncHandler(async (req, res) => {
+    const { rows } = await query(
+      `UPDATE app_users
+       SET status = COALESCE(status, $2)
+       WHERE id = $1
+       RETURNING status`,
+      [req.user.id, 'in_review']
+    );
+    const status = rows[0]?.status ?? null;
+    const statusLabel = status ? STATUS_LABELS[status] ?? null : null;
+    res.json({ ok: true, status, statusLabel });
+  })
 );
 
 app.get(
@@ -946,3 +954,6 @@ bootstrap
     console.error('Failed to start server', err);
     process.exit(1);
   });
+
+
+

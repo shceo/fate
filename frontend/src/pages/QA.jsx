@@ -33,7 +33,7 @@ export default function QA() {
 
   const showToast = (message) => {
     setToast(message);
-    window.setTimeout(() => setToast(null), 2200);
+    window.setTimeout(() => setToast(null), 2400);
   };
 
   const persistAnswers = async (withSuccessToast = true) => {
@@ -42,7 +42,9 @@ export default function QA() {
     try {
       setBusy(true);
       await saveAnswers();
-      if (withSuccessToast) showToast("Ответы сохранены");
+      if (withSuccessToast) {
+        showToast("Ответы сохранены");
+      }
     } catch (error) {
       console.error("Failed to save answers", error);
       showToast("Не удалось сохранить ответы. Попробуйте ещё раз.");
@@ -69,7 +71,7 @@ export default function QA() {
       window.location.href = "/complete";
     } catch (error) {
       console.error("Failed to complete questionnaire", error);
-      showToast("Не удалось завершить интервью. Попробуйте позже.");
+      showToast("Не удалось завершить вопросы. Попробуйте позже.");
     } finally {
       setBusy(false);
     }
@@ -82,6 +84,7 @@ export default function QA() {
 
   const value = answers[index] ?? "";
   const disabled = busy || loading;
+  const currentQuestion = totalCount > 0 ? index + 1 : 0;
 
   return (
     <div>
@@ -116,13 +119,11 @@ export default function QA() {
             <QuestionsEmptyState />
           ) : (
             <>
-              <div className="text-muted flex justify-between flex-wrap gap-2">
+              <div className="flex justify-between flex-wrap gap-2 text-muted">
                 <span>
-                  Вопрос {index + 1} из {questions.length}
+                  Вопрос {currentQuestion} из {totalCount}
                 </span>
-                <span>
-                  Сохраняйте ответы по мере заполнения — вы всегда можете вернуться назад.
-                </span>
+                <span>Прогресс: {progress}%</span>
               </div>
 
               <h1 className="font-serif text-[clamp(1.4rem,3.8vw,2.4rem)] leading-tight mt-2 break-words">
@@ -133,7 +134,7 @@ export default function QA() {
 
               <textarea
                 className="input min-h-[220px] text-[1.05rem] mt-3"
-                placeholder="Расскажите всё, что считаете важным. Можно записывать тезисы или подробную историю."
+                placeholder="Опишите ваш ответ. Приведите примеры, детали и факты — всё, что поможет создать книгу."
                 value={value}
                 onChange={(e) => updateAnswer(index, e.target.value)}
                 disabled={disabled}
@@ -162,7 +163,7 @@ export default function QA() {
                   >
                     {index < questions.length - 1
                       ? "Далее"
-                      : "Завершить интервью"}
+                      : "Завершить вопросы"}
                   </button>
                 </div>
               </div>

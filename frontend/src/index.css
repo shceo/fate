@@ -73,6 +73,24 @@
   .topbar{ position:sticky; top:0; z-index:40; backdrop-filter:saturate(140%) blur(8px); background-color:rgba(250,247,242,.75); border-bottom:1px solid var(--line); }
   .hairline{ height:1px; background:var(--line); border:none; margin:1rem 0 }
   .status{ display:flex; align-items:center; gap:.6rem; padding:.8rem; background:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,.4)); border:1px solid var(--line); border-radius:12px; }
+  .modal-backdrop{
+    position:fixed;
+    inset:0;
+    z-index:80;
+    display:grid;
+    place-items:center;
+    padding:1.5rem;
+    background:rgba(31,29,27,.32);
+    backdrop-filter:blur(8px);
+  }
+  .modal-card{
+    width:min(420px,92vw);
+    padding:1.6rem;
+    border-radius:var(--radius-lg);
+    background:linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,255,255,.66));
+    border:1px solid rgba(255,255,255,.75);
+    box-shadow:var(--shadow-soft);
+  }
   .password-field{ position:relative; }
   .password-toggle{
     position:absolute;

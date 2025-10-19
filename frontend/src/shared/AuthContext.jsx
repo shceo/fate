@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 const Auth = createContext(null);
 
@@ -6,14 +12,27 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/me", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) setUser(data);
-      })
-      .finally(() => setLoaded(true));
+  const refreshUser = useCallback(async () => {
+    try {
+      const response = await fetch("/api/me", { credentials: "include" });
+      if (!response.ok) {
+        if (response.status === 401) {
+          setUser(null);
+        }
+        return null;
+      }
+      const data = await response.json();
+      setUser(data);
+      return data;
+    } catch (error) {
+      console.error("Не удалось обновить данные пользователя", error);
+      return null;
+    }
   }, []);
+
+  useEffect(() => {
+    refreshUser().finally(() => setLoaded(true));
+  }, [refreshUser]);
 
   const login = async (email, password) => {
     const response = await fetch("/api/auth/login", {
@@ -23,10 +42,11 @@ export function AuthProvider({ children }) {
       body: JSON.stringify({ email, password }),
     });
     if (!response.ok) {
-      throw new Error("Не удалось войти.");
+      throw new Error("Не удалось войти. Проверьте данные и попробуйте снова.");
     }
     const data = await response.json();
     setUser(data);
+    await refreshUser();
     return data;
   };
 
@@ -38,10 +58,11 @@ export function AuthProvider({ children }) {
       body: JSON.stringify({ name, email, password }),
     });
     if (!response.ok) {
-      throw new Error("Не удалось создать аккаунт.");
+      throw new Error("Не удалось создать аккаунт. Попробуйте ещё раз.");
     }
     const data = await response.json();
     setUser(data);
+    await refreshUser();
     return data;
   };
 
@@ -62,12 +83,22 @@ export function AuthProvider({ children }) {
     }
     const data = await response.json();
     setUser(data);
+    await refreshUser();
     return data;
   };
 
   return (
     <Auth.Provider
-      value={{ user, setUser, loaded, login, register, logout, adminLogin }}
+      value={{
+        user,
+        setUser,
+        loaded,
+        login,
+        register,
+        logout,
+        adminLogin,
+        refreshUser,
+      }}
     >
       {children}
     </Auth.Provider>

@@ -13,6 +13,7 @@ const QuestionsContext = createContext(null);
 
 export function QuestionsProvider({ children }) {
   const { user } = useAuth();
+  const interviewLocked = Boolean(user?.status);
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [loading, setLoading] = useState(false);
@@ -28,7 +29,7 @@ export function QuestionsProvider({ children }) {
   }, []);
 
   const load = useCallback(async () => {
-    if (!user) {
+    if (!user || interviewLocked) {
       resetState();
       return;
     }
@@ -50,10 +51,7 @@ export function QuestionsProvider({ children }) {
 
       const normalized = {};
       answersPayload.forEach((entry) => {
-        if (
-          entry &&
-          Number.isFinite(Number(entry.questionIndex))
-        ) {
+        if (entry && Number.isFinite(Number(entry.questionIndex))) {
           normalized[Number(entry.questionIndex)] = String(entry.text ?? "");
         }
       });
@@ -75,7 +73,7 @@ export function QuestionsProvider({ children }) {
     return () => {
       isActive = false;
     };
-  }, [user, resetState]);
+  }, [user, interviewLocked, resetState]);
 
   useEffect(() => {
     let dispose;
@@ -109,6 +107,10 @@ export function QuestionsProvider({ children }) {
   }, [answeredCount, totalCount]);
 
   const saveAnswers = useCallback(async () => {
+    if (interviewLocked) {
+      throw new Error("Анкета уже отправлена и недоступна для редактирования.");
+    }
+
     const indexes = new Set();
     questions.forEach((_, idx) => indexes.add(idx));
     Object.keys(answers || {}).forEach((key) => {
@@ -125,7 +127,7 @@ export function QuestionsProvider({ children }) {
 
     await apiPost("/api/answers", { entries });
     setLastSaved(new Date().toISOString());
-  }, [answers, questions]);
+  }, [answers, questions, interviewLocked]);
 
   const value = useMemo(
     () => ({
@@ -139,6 +141,7 @@ export function QuestionsProvider({ children }) {
       loading,
       loaded,
       lastSaved,
+      interviewLocked,
       reload: load,
     }),
     [
@@ -152,8 +155,9 @@ export function QuestionsProvider({ children }) {
       loading,
       loaded,
       lastSaved,
+      interviewLocked,
       load,
-    ]
+    ],
   );
 
   return (

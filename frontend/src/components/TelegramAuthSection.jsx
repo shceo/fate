@@ -4,7 +4,7 @@ import { useAuth } from "../shared/AuthContext.jsx";
 
 export default function TelegramAuthSection() {
   const botUsername = import.meta.env.VITE_TG_BOT_USERNAME;
-  const { setUser } = useAuth();
+  const { setUser, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -28,11 +28,12 @@ export default function TelegramAuthSection() {
   }, []);
 
   const handleSuccess = useCallback(
-    (profile) => {
+    async (profile) => {
       setUser(profile);
+      await refreshUser();
       window.location.href = "/dashboard";
     },
-    [setUser]
+    [refreshUser, setUser]
   );
 
   const pollLogin = useCallback(
@@ -72,7 +73,7 @@ export default function TelegramAuthSection() {
     if (!botUsername) return;
     stopPolling();
     setError("");
-    setStatus("Ждём подтверждения в Telegram...");
+    setStatus("Ждём подтверждения в Telegram…");
     setLoading(true);
     try {
       const response = await fetch("/api/auth/tg_init", {
@@ -112,12 +113,7 @@ export default function TelegramAuthSection() {
       <div className="text-center text-sm text-muted">
         или войдите через бота Fate в Telegram
       </div>
-      <button
-        type="button"
-        className="btn"
-        onClick={startBotFlow}
-        disabled={loading}
-      >
+      <button type="button" className="btn" onClick={startBotFlow} disabled={loading}>
         {loading ? "Ждём подтверждения..." : "Открыть бота для входа"}
       </button>
       {status && <div className="text-sm text-muted text-center">{status}</div>}

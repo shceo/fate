@@ -1,4 +1,4 @@
-let csrfPromise = null;
+﻿let csrfPromise = null;
 
 async function getCsrf() {
   if (!csrfPromise) {

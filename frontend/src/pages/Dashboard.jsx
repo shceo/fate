@@ -1,148 +1,179 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
 import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
-import Progress from "../components/Progress.jsx";
-import QuestionsEmptyState from "../components/QuestionsEmptyState.jsx";
 import { useAuth } from "../shared/AuthContext.jsx";
 import { useQuestions } from "../shared/QuestionsContext.jsx";
+import { getOrderStatusLabel } from "../shared/orderStatus.js";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const {
-    questions,
-    answers,
-    updateAnswer,
-    progress,
-    answeredCount,
-    totalCount,
-    saveAnswers,
-    loaded,
-    loading,
-  } = useQuestions();
-  const [toast, setToast] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const { loaded, loading, totalCount, answeredCount, interviewLocked } =
+    useQuestions();
 
-  const showToast = (message) => {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 2200);
-  };
-
-  const handleSave = async () => {
-    if (busy) return;
-    try {
-      setBusy(true);
-      await saveAnswers();
-      showToast("Ответы сохранены");
-    } catch (error) {
-      console.error("Failed to save answers", error);
-      showToast("Не удалось сохранить ответы. Попробуйте ещё раз.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const disabled = busy || loading;
-  const hasQuestions = loaded && questions.length > 0;
   const greeting = user?.name
     ? `Добро пожаловать, ${user.name}`
     : "Добро пожаловать";
-  const progressLabel = totalCount
-    ? `${answeredCount} из ${totalCount} вопросов`
-    : "Вопросов пока нет";
+  const orderStatusLabel =
+    user?.statusLabel ?? getOrderStatusLabel(user?.status);
+  const orderedText = user?.ordered
+    ? "Заказ подтверждён"
+    : "Ожидает подтверждения";
+  const orderedDescription = user?.ordered
+    ? "Мы уже работаем над вашей книгой и будем обновлять статус по мере продвижения."
+    : "Подтвердите заказ, чтобы мы могли перейти к подготовке книги.";
+  const statusDescription = orderStatusLabel
+    ? "Следите за этапами проекта — статус обновляется автоматически."
+    : "Как только редакция начнёт работу, статус проекта появится здесь.";
+  const hasQuestions = loaded && totalCount > 0;
+  const questionsSummary =
+    hasQuestions && !interviewLocked
+      ? `Ответов: ${answeredCount} из ${totalCount}`
+      : null;
+  const showQuestionsButton = hasQuestions && !interviewLocked;
+  const loadingQuestions = loading || !loaded;
+  const coverLabel = user?.cover ?? "Обложка ещё не выбрана";
 
   return (
     <div>
       <Header />
 
-      {toast && (
-        <div className="fixed inset-0 z-[60] grid place-items-center pointer-events-none">
-          <div className="pointer-events-auto card-glass px-6 py-4 text-center shadow-soft">
-            <div className="font-serif text-lg">{toast}</div>
-          </div>
-        </div>
-      )}
-
       <section className="container mx-auto px-4 mt-4 grid gap-4 md:grid-cols-[280px_1fr] items-start">
-        <aside className="paper p-4">
-          <h2 className="font-serif text-[clamp(1.4rem,3.2vw,2rem)]">
-            {greeting}
-          </h2>
-          <p className="text-muted">
-            Здесь вы можете заполнять ответы на вопросы интервью и отслеживать
-            прогресс книги. Меняйте ответы в любое время — все изменения можно
-            сохранить одной кнопкой.
-          </p>
-          <div className="mt-3 font-semibold">Прогресс</div>
-          <Progress value={progress} />
-          <div className="text-muted text-sm mt-1">{progressLabel}</div>
+        <aside className="paper p-4 space-y-4">
+          <div>
+            <h2 className="font-serif text-[clamp(1.4rem,3.2vw,2rem)]">
+              {greeting}
+            </h2>
+            <p className="text-muted">
+              Здесь собрана основная информация о вашем проекте и статусе
+              заказа. При необходимости вы всегда можете перейти к заполнению
+              вопросов.
+            </p>
+          </div>
 
-          <div className="mt-4 border-t border-dashed border-line pt-4">
+          <div className="space-y-3">
+            <div className="font-semibold">Статус заказа</div>
+            <div className="flex items-start gap-3 p-3 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
+              <span className="text-xl" aria-hidden="true">
+                📦
+              </span>
+              <div>
+                <div className="font-semibold">{orderedText}</div>
+                <div className="text-muted text-sm">{orderedDescription}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="font-semibold">Этап проекта</div>
+            <div className="flex items-start gap-3 p-3 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
+              <span className="text-xl" aria-hidden="true">
+                🛠️
+              </span>
+              <div>
+                <div className="font-semibold">
+                  {orderStatusLabel ?? "Статус ещё не назначен"}
+                </div>
+                <div className="text-muted text-sm">{statusDescription}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-dashed border-line pt-4">
             <div className="font-semibold mb-2">Обложка</div>
             <div className="flex items-center gap-2">
               <div className="cover bg-gradient-to-br from-blush to-lav w-[84px] min-w-[84px]">
-                <div className="meta">
-                  {user?.cover ?? "Обложка не выбрана"}
-                </div>
+                <div className="meta">{coverLabel}</div>
               </div>
               <Link className="btn" to="/covers">
                 Выбрать обложку
               </Link>
             </div>
           </div>
+
+          {user?.email && (
+            <div className="border-t border-dashed border-line pt-4 space-y-1">
+              <div className="font-semibold">Учётная запись</div>
+              <div className="text-muted text-sm">Email: {user.email}</div>
+              {user?.createdAt && (
+                <div className="text-muted text-sm">
+                  Вы с нами с{" "}
+                  {new Date(user.createdAt).toLocaleDateString("ru-RU", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </aside>
 
-        <main className="paper p-4">
-          <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-            <h3 className="font-serif text-xl">Ваши вопросы и ответы</h3>
-            <Link className="btn" to="/qa">
-              Перейти к интервью
-            </Link>
+        <main className="paper p-4 space-y-4">
+          <div className="space-y-2">
+            <h3 className="font-serif text-xl">Ваш проект</h3>
+            <p className="text-muted">
+              Здесь отображаются актуальные данные по интервью и статусу
+              подготовки книги.
+            </p>
           </div>
 
-          {!loaded || loading ? (
+          {loadingQuestions ? (
             <div className="text-center text-muted py-10">
-              Загружаем вопросы...
+              Загружаем информацию...
             </div>
-          ) : hasQuestions ? (
+          ) : interviewLocked ? (
+            <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
+              <span className="text-xl" aria-hidden="true">
+                ✅
+              </span>
+              <div>
+                <div className="font-semibold">Ответы отправлены редакции</div>
+                <div className="text-muted">
+                  Мы изучим ваши материалы и свяжемся, если потребуются
+                  уточнения. Следите за статусом проекта в панели слева.
+                </div>
+              </div>
+            </div>
+          ) : showQuestionsButton ? (
             <div className="space-y-4">
-              {questions.map((question, idx) => (
-                <article
-                  key={idx}
-                  className="p-3 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]"
-                >
-                  <div className="text-muted text-sm mb-1">
-                    Вопрос {idx + 1}
+              <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
+                <span className="text-xl" aria-hidden="true">
+                  ✍️
+                </span>
+                <div>
+                  <div className="font-semibold">
+                    Вопросы готовы к заполнению
                   </div>
-                  <div className="font-serif text-lg mb-2 leading-tight break-words">
-                    {question}
+                  <div className="text-muted">
+                    Вы можете отвечать в удобном темпе. Все изменения
+                    сохраняются на странице вопросов.
                   </div>
-                  <textarea
-                    className="input min-h-[140px]"
-                    placeholder="Напишите ответ здесь"
-                    value={answers[idx] ?? ""}
-                    onChange={(e) => updateAnswer(idx, e.target.value)}
-                    disabled={disabled}
-                  />
-                </article>
-              ))}
+                  {questionsSummary && (
+                    <div className="text-muted text-sm mt-2">
+                      {questionsSummary}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <Link className="btn primary" to="/qa">
+                Перейти к вопросам
+              </Link>
             </div>
           ) : (
-            <QuestionsEmptyState />
+            <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
+              <span className="text-xl" aria-hidden="true">
+                ⏳
+              </span>
+              <div>
+                <div className="font-semibold">Вопросы ещё не назначены</div>
+                <div className="text-muted">
+                  Как только редакция подготовит список вопросов, мы отправим
+                  уведомление и вы сможете перейти к заполнению.
+                </div>
+              </div>
+            </div>
           )}
-
-          <div className="flex gap-2 flex-wrap items-center mt-4">
-            <button
-              className="btn primary"
-              onClick={handleSave}
-              disabled={disabled || !hasQuestions}
-            >
-              Сохранить ответы
-            </button>
-            <Link className="btn" to="/qa">
-              К вопросам интервью
-            </Link>
-          </div>
         </main>
       </section>
 
