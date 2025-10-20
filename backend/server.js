@@ -114,6 +114,13 @@ const statusSchema = z
     message: 'INVALID_STATUS'
   });
 
+const templateUpsertSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(1000).optional(),
+  questions: z.array(z.string().trim()).optional(),
+  bulk: z.string().optional()
+});
+
 const telegramWidgetSchema = z.object({
   id: z.union([z.string(), z.number()]),
   first_name: z.string().optional(),
@@ -147,6 +154,29 @@ function parseBody(schema, payload) {
 
 function signToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+}
+
+function normalizeQuestionsInput(payload) {
+  const questionsArray = Array.isArray(payload?.questions) ? payload.questions : [];
+  const bulkRaw = typeof payload?.bulk === 'string' ? payload.bulk : '';
+
+  const normalized = [];
+  for (const entry of questionsArray) {
+    if (typeof entry !== 'string') continue;
+    const trimmed = entry.trim();
+    if (trimmed) normalized.push(trimmed);
+  }
+
+  if (bulkRaw) {
+    for (const chunk of bulkRaw.split('$')) {
+      const trimmed = chunk.trim();
+      if (trimmed) {
+        normalized.push(trimmed);
+      }
+    }
+  }
+
+  return normalized;
 }
 
 function cookieOpts() {
@@ -227,6 +257,30 @@ async function fetchUserByTelegramId(telegramId) {
   return rows[0] ?? null;
 }
 
+async function fetchTemplateById(id) {
+  const templateRes = await query(
+    `SELECT id, title, description, created_at, updated_at
+     FROM question_templates
+     WHERE id = $1`,
+    [id]
+  );
+  const template = templateRes.rows[0] ?? null;
+  if (!template) {
+    return null;
+  }
+  const itemsRes = await query(
+    `SELECT text
+     FROM question_template_items
+     WHERE template_id = $1
+     ORDER BY position ASC`,
+    [id]
+  );
+  return {
+    ...template,
+    questions: itemsRes.rows.map((row) => row.text)
+  };
+}
+
 function mapTelegram(row) {
   if (!row?.telegram_id) {
     return null;
@@ -255,6 +309,32 @@ function presentUser(row) {
     createdAt: row.created_at,
     telegram: mapTelegram(row)
   };
+}
+
+function presentTemplate(row, questions) {
+  const list = Array.isArray(questions) ? questions : row.questions;
+  const questionCount = Number(
+    row.question_count ?? row.questions_count ?? (Array.isArray(list) ? list.length : 0) ?? 0
+  );
+  const firstQuestion =
+    typeof row.first_question === 'string'
+      ? row.first_question
+      : Array.isArray(list) && typeof list[0] === 'string'
+      ? list[0]
+      : null;
+  const payload = {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    questionCount,
+    firstQuestion
+  };
+  if (Array.isArray(list)) {
+    payload.questions = list;
+  }
+  return payload;
 }
 
 function tokenPayload(row) {
@@ -763,6 +843,159 @@ app.post(
   })
 );
 
+app.get(
+  '/api/admin/templates',
+  authRequired,
+  adminRequired,
+  asyncHandler(async (_req, res) => {
+    const { rows } = await query(
+      `SELECT
+         t.id,
+         t.title,
+         t.description,
+         t.created_at,
+         t.updated_at,
+         COALESCE(q.question_count, 0) AS question_count,
+         first.text AS first_question
+       FROM question_templates t
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS question_count
+         FROM question_template_items
+         WHERE template_id = t.id
+       ) q ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT text
+         FROM question_template_items
+         WHERE template_id = t.id
+         ORDER BY position ASC
+         LIMIT 1
+       ) first ON TRUE
+       ORDER BY t.updated_at DESC, t.created_at DESC`
+    );
+    res.json({
+      templates: rows.map((row) => presentTemplate(row))
+    });
+  })
+);
+
+app.get(
+  '/api/admin/templates/:id',
+  authRequired,
+  adminRequired,
+  asyncHandler(async (req, res) => {
+    const template = await fetchTemplateById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    res.json(presentTemplate(template, template.questions));
+  })
+);
+
+app.post(
+  '/api/admin/templates',
+  authRequired,
+  adminRequired,
+  csrfRequired,
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    const payload = parseBody(templateUpsertSchema, req.body);
+    const questions = normalizeQuestionsInput(payload);
+    if (questions.length === 0) {
+      return res.status(400).json({
+        error: 'NO_QUESTIONS',
+        message: 'Template must include at least one question.'
+      });
+    }
+    const description =
+      typeof payload.description === 'string' && payload.description.length
+        ? payload.description
+        : null;
+    const id = nanoid();
+    await transaction(async (client) => {
+      await client.query(
+        `INSERT INTO question_templates (id, title, description)
+         VALUES ($1, $2, $3)`,
+        [id, payload.title, description]
+      );
+      for (let idx = 0; idx < questions.length; idx += 1) {
+        await client.query(
+          `INSERT INTO question_template_items (template_id, position, text)
+           VALUES ($1, $2, $3)`,
+          [id, idx, questions[idx]]
+        );
+      }
+    });
+    const template = await fetchTemplateById(id);
+    res.status(201).json(presentTemplate(template, template.questions));
+  })
+);
+
+app.put(
+  '/api/admin/templates/:id',
+  authRequired,
+  adminRequired,
+  csrfRequired,
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    const payload = parseBody(templateUpsertSchema, req.body);
+    const questions = normalizeQuestionsInput(payload);
+    if (questions.length === 0) {
+      return res.status(400).json({
+        error: 'NO_QUESTIONS',
+        message: 'Template must include at least one question.'
+      });
+    }
+    const existing = await fetchTemplateById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    const description =
+      typeof payload.description === 'string' && payload.description.length
+        ? payload.description
+        : null;
+    await transaction(async (client) => {
+      await client.query(
+        `UPDATE question_templates
+         SET title = $2,
+             description = $3,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [existing.id, payload.title, description]
+      );
+      await client.query('DELETE FROM question_template_items WHERE template_id = $1', [
+        existing.id
+      ]);
+      for (let idx = 0; idx < questions.length; idx += 1) {
+        await client.query(
+          `INSERT INTO question_template_items (template_id, position, text)
+           VALUES ($1, $2, $3)`,
+          [existing.id, idx, questions[idx]]
+        );
+      }
+    });
+    const template = await fetchTemplateById(existing.id);
+    res.json(presentTemplate(template, template.questions));
+  })
+);
+
+app.delete(
+  '/api/admin/templates/:id',
+  authRequired,
+  adminRequired,
+  csrfRequired,
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    const result = await query(
+      'DELETE FROM question_templates WHERE id = $1 RETURNING id',
+      [req.params.id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    res.status(204).send();
+  })
+);
+
 
 app.get(
   '/api/admin/users',
@@ -877,22 +1110,7 @@ app.post(
   asyncHandler(async (req, res) => {
     const modeRaw = typeof req.body?.mode === 'string' ? req.body.mode : 'append';
     const mode = modeRaw === 'replace' ? 'replace' : 'append';
-    const questionsArray = Array.isArray(req.body?.questions) ? req.body.questions : [];
-    const bulkRaw = typeof req.body?.bulk === 'string' ? req.body.bulk : '';
-
-    const parsed = [];
-    for (const item of questionsArray) {
-      if (typeof item === 'string') {
-        const value = item.trim();
-        if (value) parsed.push(value);
-      }
-    }
-    if (bulkRaw) {
-      bulkRaw.split('$').forEach((rawPart) => {
-        const value = rawPart.trim();
-        if (value) parsed.push(value);
-      });
-    }
+    const questions = normalizeQuestionsInput(req.body);
 
     const user = await fetchUserById(req.params.id);
     if (!user) {
@@ -912,9 +1130,8 @@ app.post(
         );
         startIndex = Number(maxPosition.rows[0]?.max ?? -1) + 1;
       }
-      const limited = parsed.slice(0, 500);
-      for (let idx = 0; idx < limited.length; idx += 1) {
-        const question = limited[idx];
+      for (let idx = 0; idx < questions.length; idx += 1) {
+        const question = questions[idx];
         await client.query(
           `INSERT INTO user_questions (user_id, position, text)
            VALUES ($1, $2, $3)`,

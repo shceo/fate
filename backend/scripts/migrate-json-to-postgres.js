@@ -1,6 +1,7 @@
 import { readFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { nanoid } from 'nanoid';
 
 import { query, transaction } from '../db/client.js';
 
@@ -22,6 +23,8 @@ async function main() {
   let usersMigrated = 0;
   let questionsMigrated = 0;
   let answersMigrated = 0;
+  let templatesMigrated = 0;
+  let templateQuestionsMigrated = 0;
 
   await transaction(async (client) => {
     const users = Array.isArray(data.users) ? data.users : [];
@@ -60,7 +63,7 @@ async function main() {
         ? data.userQuestions[id]
         : [];
       await client.query('DELETE FROM user_questions WHERE user_id = $1', [id]);
-      for (let index = 0; index < Math.min(questions.length, 500); index += 1) {
+      for (let index = 0; index < questions.length; index += 1) {
         const text = String(questions[index] ?? '').trim();
         if (!text) continue;
         await client.query(
@@ -85,10 +88,45 @@ async function main() {
         answersMigrated += 1;
       }
     }
+
+    const templates = Array.isArray(data.templates) ? data.templates : [];
+    for (const template of templates) {
+      const title = String(template.title ?? '').trim();
+      if (!title) continue;
+      const idRaw = typeof template.id === 'string' ? template.id.trim() : '';
+      const id = idRaw.length ? idRaw : nanoid();
+      const description = template.description ? String(template.description).trim() : null;
+      const questions = Array.isArray(template.questions) ? template.questions : [];
+
+      await client.query(
+        `INSERT INTO question_templates (id, title, description)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (id)
+         DO UPDATE SET
+           title = EXCLUDED.title,
+           description = EXCLUDED.description,
+           updated_at = NOW()`,
+        [id, title, description]
+      );
+      await client.query('DELETE FROM question_template_items WHERE template_id = $1', [id]);
+      let position = 0;
+      for (const raw of questions) {
+        const text = String(raw ?? '').trim();
+        if (!text) continue;
+        await client.query(
+          `INSERT INTO question_template_items (template_id, position, text)
+           VALUES ($1, $2, $3)`,
+          [id, position, text]
+        );
+        position += 1;
+        templateQuestionsMigrated += 1;
+      }
+      templatesMigrated += 1;
+    }
   });
 
   console.log(
-    `Migration finished: users=${usersMigrated}, questions=${questionsMigrated}, answers=${answersMigrated}`
+    `Migration finished: users=${usersMigrated}, questions=${questionsMigrated}, answers=${answersMigrated}, templates=${templatesMigrated}, template_questions=${templateQuestionsMigrated}`
   );
 }
 

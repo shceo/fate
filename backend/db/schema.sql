@@ -52,3 +52,21 @@ ALTER TABLE app_users
 CREATE UNIQUE INDEX IF NOT EXISTS app_users_telegram_id_key
   ON app_users (telegram_id)
   WHERE telegram_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS question_templates (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS question_template_items (
+  id BIGSERIAL PRIMARY KEY,
+  template_id TEXT NOT NULL REFERENCES question_templates (id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  text TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS question_template_items_template_position_key
+  ON question_template_items (template_id, position);
