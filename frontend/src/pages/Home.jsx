@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { Link } from "react-router-dom";
 import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
@@ -29,15 +29,15 @@ export default function Home() {
         <div className="container mx-auto px-4 grid gap-8 items-center md:grid-cols-[1.1fr_.9fr]">
           <div>
             <div className="uppercase tracking-[.18em] text-sm text-muted">
-              Индивидуальные книги о семье
+              Книга о вашей жизни
             </div>
             <h1 className="font-serif font-semibold text-[clamp(2.1rem,4.4vw,3.4rem)] leading-tight mt-2">
-              Расскажите семейную историю — мы превратим её в изданную книгу.
+              Собирайте воспоминания и превращайте их в книгу.
             </h1>
             <p className="text-muted max-w-[55ch] mt-4">
-              Fate помогает собрать воспоминания, интервью и фотографии, чтобы оформить их в
-              настоящую биографию. Мы сопровождаем вас на каждом этапе — от первых вопросов до
-              готового тиража.
+              Fate помогает собирать сообщения, фотографии и моменты от близких
+              и бережно превращает их в красивую книгу архивного качества —
+              интимный подарок на всю жизнь.
             </p>
             <div className="mt-6 flex gap-3 flex-wrap">
               <Link className="btn primary" to="/register">
@@ -70,8 +70,9 @@ export default function Home() {
             Как работает Fate
           </h2>
           <p className="text-muted max-w-[60ch]">
-            Мы бережно работаем с личными историями и оформляем их в авторские книги. Редакторы и
-            дизайнеры помогают собирать материалы, обрабатывать тексты и готовить печатный тираж.
+            Мы бережно работаем с личными историями и оформляем их в авторские
+            книги. Редакторы и дизайнеры помогают собирать материалы,
+            обрабатывать тексты и готовить печатный тираж.
           </p>
           <div className="grid gap-4 md:grid-cols-3 mt-5">
             {steps.map((step, index) => (

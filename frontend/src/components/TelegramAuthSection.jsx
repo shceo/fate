@@ -75,7 +75,9 @@ export default function TelegramAuthSection() {
     setError("");
     setStatus("Ждём подтверждения в Telegram…");
     setLoading(true);
+    let botWindow;
     try {
+      botWindow = window.open("", "_blank", "noopener");
       const response = await fetch("/api/auth/tg_init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,12 +92,18 @@ export default function TelegramAuthSection() {
         throw new Error("MISSING_NONCE");
       }
       lastNonceRef.current = data.nonce;
-      if (data.tme) {
-        window.open(data.tme, "_blank", "noopener");
+      const botLink = data.tme || `https://t.me/${botUsername}?start=${data.nonce}`;
+      if (botWindow) {
+        botWindow.location.href = botLink;
+      } else {
+        window.location.href = botLink;
       }
       pollLogin(data.nonce);
     } catch (err) {
       console.error("Telegram init error", err);
+      if (botWindow && !botWindow.closed) {
+        botWindow.close();
+      }
       setError("Не удалось открыть Telegram. Попробуйте ещё раз.");
       setStatus("");
       setLoading(false);
