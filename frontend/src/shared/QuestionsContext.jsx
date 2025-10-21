@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useAuth } from "./AuthContext.jsx";
@@ -14,15 +15,19 @@ const QuestionsContext = createContext(null);
 export function QuestionsProvider({ children }) {
   const { user } = useAuth();
   const interviewLocked = Boolean(user?.status);
+  const answersRef = useRef({});
   const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState({});
+  const [answersMeta, setAnswersMeta] = useState({});
+  const [answersVersion, setAnswersVersion] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
 
   const resetState = useCallback(() => {
     setQuestions([]);
-    setAnswers({});
+    answersRef.current = {};
+    setAnswersMeta({});
+    setAnswersVersion((prev) => prev + 1);
     setLoading(false);
     setLoaded(true);
     setLastSaved(null);
@@ -56,14 +61,30 @@ export function QuestionsProvider({ children }) {
         }
       });
 
-      setQuestions(Array.isArray(questionsPayload) ? questionsPayload : []);
-      setAnswers(normalized);
+      const preparedQuestions = Array.isArray(questionsPayload)
+        ? questionsPayload
+        : [];
+      answersRef.current = normalized;
+      const nextMeta = {};
+      Object.keys(normalized).forEach((key) => {
+        const num = Number(key);
+        if (!Number.isFinite(num)) return;
+        const text = normalized[num];
+        if (typeof text === "string" && text.trim()) {
+          nextMeta[num] = true;
+        }
+      });
+      setQuestions(preparedQuestions);
+      setAnswersMeta(nextMeta);
+      setAnswersVersion((prev) => prev + 1);
       setLastSaved(null);
     } catch (error) {
       console.error("Failed to load questions:", error);
       if (!isActive) return;
       setQuestions([]);
-      setAnswers({});
+      setAnswersMeta({});
+      answersRef.current = {};
+      setAnswersVersion((prev) => prev + 1);
     } finally {
       if (!isActive) return;
       setLoading(false);
@@ -85,19 +106,38 @@ export function QuestionsProvider({ children }) {
     };
   }, [load]);
 
-  const updateAnswer = useCallback((index, text) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [index]: text,
-    }));
+  const updateAnswer = useCallback((rawIndex, rawText) => {
+    const index = Number(rawIndex);
+    if (!Number.isFinite(index)) return;
+    const text = typeof rawText === "string" ? rawText : "";
+    const store = answersRef.current || {};
+    const existing = store[index] ?? "";
+    if (existing === text) return;
+    store[index] = text;
+    answersRef.current = store;
+    setAnswersMeta((prev) => {
+      const hasText = text.trim().length > 0;
+      const previous = prev[index] ?? false;
+      if (hasText === previous) {
+        return prev;
+      }
+      const next = { ...prev };
+      if (hasText) {
+        next[index] = true;
+      } else {
+        delete next[index];
+      }
+      return next;
+    });
+    setAnswersVersion((prev) => prev + 1);
   }, []);
 
   const answeredCount = useMemo(() => {
+    if (!questions.length) return 0;
     return questions.reduce((acc, _, idx) => {
-      const value = answers[idx];
-      return typeof value === "string" && value.trim() ? acc + 1 : acc;
+      return answersMeta[idx] ? acc + 1 : acc;
     }, 0);
-  }, [answers, questions]);
+  }, [answersMeta, questions]);
 
   const totalCount = useMemo(() => questions.length, [questions]);
 
@@ -113,7 +153,8 @@ export function QuestionsProvider({ children }) {
 
     const indexes = new Set();
     questions.forEach((_, idx) => indexes.add(idx));
-    Object.keys(answers || {}).forEach((key) => {
+    const answersSnapshot = answersRef.current || {};
+    Object.keys(answersSnapshot).forEach((key) => {
       const num = Number(key);
       if (Number.isFinite(num)) indexes.add(num);
     });
@@ -122,17 +163,24 @@ export function QuestionsProvider({ children }) {
       .sort((a, b) => a - b)
       .map((idx) => ({
         questionIndex: idx,
-        text: answers[idx] ?? "",
+        text: answersSnapshot[idx] ?? "",
       }));
 
     await apiPost("/api/answers", { entries });
     setLastSaved(new Date().toISOString());
-  }, [answers, questions, interviewLocked]);
+  }, [questions, interviewLocked, answersRef]);
+
+  const getAnswer = useCallback((rawIndex) => {
+    const index = Number(rawIndex);
+    if (!Number.isFinite(index)) return "";
+    const store = answersRef.current || {};
+    return store[index] ?? "";
+  }, []);
 
   const value = useMemo(
     () => ({
       questions,
-      answers,
+      getAnswer,
       updateAnswer,
       answeredCount,
       totalCount,
@@ -143,10 +191,11 @@ export function QuestionsProvider({ children }) {
       lastSaved,
       interviewLocked,
       reload: load,
+      answersVersion,
     }),
     [
       questions,
-      answers,
+      getAnswer,
       updateAnswer,
       answeredCount,
       totalCount,
@@ -157,6 +206,7 @@ export function QuestionsProvider({ children }) {
       lastSaved,
       interviewLocked,
       load,
+      answersVersion,
     ],
   );
 
