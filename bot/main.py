@@ -7,6 +7,8 @@ from typing import Optional
 import requests
 from dotenv import load_dotenv
 from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
@@ -75,8 +77,13 @@ async def post_claim(payload: dict[str, object]) -> Optional[requests.Response]:
 
 
 def contact_keyboard() -> ReplyKeyboardMarkup:
-    button = KeyboardButton("Поделиться телефоном", request_contact=True)
+    button = KeyboardButton("Отправить номер телефона", request_contact=True)
     return ReplyKeyboardMarkup([[button]], resize_keyboard=True, one_time_keyboard=True)
+
+
+def site_keyboard() -> InlineKeyboardMarkup:
+    button = InlineKeyboardButton("Открыть сайт", url=SITE_URL)
+    return InlineKeyboardMarkup([[button]])
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -101,10 +108,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     await message.reply_text(
-        f"Готово, вернитесь на сайт: {SITE_URL}\n\n"
-        "Если хотите, поделитесь телефоном кнопкой ниже.",
+        (
+            "Здравствуйте! Я помогу познакомиться с сервисом и оформить заказ.\n"
+            "Нажмите «Открыть сайт», чтобы посмотреть услуги, примеры и условия.\n"
+            "Если вы уже на сайте — продолжайте там, мы вас узнаем автоматически."
+        ),
+        reply_markup=site_keyboard(),
+        disable_web_page_preview=True,
+    )
+    await message.reply_text(
+        "Чтобы мы могли оперативно связаться, отправьте номер кнопкой ниже (по желанию).",
         reply_markup=contact_keyboard(),
     )
+
+
+
+
 
 
 async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -137,7 +156,16 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     await update.effective_message.reply_text(
-        "Спасибо! Телефон обновлён. Можно закрыть диалог.",
+        (
+            "Отлично! Авторизация прошла.\n"
+            "Вернитесь на сайт по кнопке ниже.\n"
+            "Чтобы мы могли оперативно связаться, отправьте номер кнопкой ниже (по желанию)."
+        ),
+        reply_markup=site_keyboard(),
+        disable_web_page_preview=True,
+    )
+    await update.effective_message.reply_text(
+        "Спасибо! Если клавиатура осталась, можете скрыть её кнопкой ниже.",
         reply_markup=ReplyKeyboardRemove(),
     )
 
