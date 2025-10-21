@@ -57,11 +57,11 @@ export default function Login() {
               />
             </div>
             {err && <div className="text-red-600">{err}</div>}
-            <div className="flex gap-2 items-center pt-1">
-              <button className="btn primary" type="submit">
+            <div className="flex flex-col gap-2 pt-1">
+              <button className="btn primary w-full justify-center" type="submit">
                 Войти
               </button>
-              <Link to="/register" className="btn">
+              <Link to="/register" className="btn w-full justify-center text-center">
                 Создать аккаунт
               </Link>
             </div>

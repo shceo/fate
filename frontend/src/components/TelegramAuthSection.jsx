@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TelegramLoginButton from "./TelegramLoginButton.jsx";
 import { useAuth } from "../shared/AuthContext.jsx";
 
@@ -10,6 +10,7 @@ export default function TelegramAuthSection() {
   const [error, setError] = useState("");
   const pollRef = useRef(null);
   const lastNonceRef = useRef(null);
+  const launchInProgressRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -70,14 +71,20 @@ export default function TelegramAuthSection() {
   );
 
   const startBotFlow = useCallback(async () => {
-    if (!botUsername) return;
+    if (!botUsername || launchInProgressRef.current) return;
+    launchInProgressRef.current = true;
     stopPolling();
     setError("");
     setStatus("Ждём подтверждения в Telegram…");
     setLoading(true);
     let botWindow;
     try {
-      botWindow = window.open("", "_blank", "noopener");
+      botWindow = window.open("", "_blank");
+      if (botWindow) {
+        try {
+          botWindow.opener = null;
+        } catch (noop) {}
+      }
       const response = await fetch("/api/auth/tg_init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -94,7 +101,10 @@ export default function TelegramAuthSection() {
       lastNonceRef.current = data.nonce;
       const botLink = data.tme || `https://t.me/${botUsername}?start=${data.nonce}`;
       if (botWindow) {
-        botWindow.location.href = botLink;
+        botWindow.location.replace(botLink);
+        try {
+          botWindow.focus();
+        } catch (noop) {}
       } else {
         window.location.href = botLink;
       }
@@ -108,8 +118,29 @@ export default function TelegramAuthSection() {
       setStatus("");
       setLoading(false);
       stopPolling();
+    } finally {
+      launchInProgressRef.current = false;
     }
   }, [botUsername, pollLogin, stopPolling]);
+
+  const widgetAllowed = useMemo(() => {
+    if (!botUsername) {
+      return false;
+    }
+    const allowedRaw = import.meta.env.VITE_TG_WIDGET_DOMAINS ?? "";
+    const allowed = allowedRaw
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+    if (!allowed.length) {
+      return false;
+    }
+    if (typeof window === "undefined") {
+      return false;
+    }
+    const host = window.location.hostname.toLowerCase();
+    return allowed.includes(host);
+  }, [botUsername]);
 
   if (!botUsername) {
     return null;
@@ -117,11 +148,15 @@ export default function TelegramAuthSection() {
 
   return (
     <div className="space-y-3">
-      <TelegramLoginButton onSuccess={handleSuccess} />
-      <div className="text-center text-sm text-muted">
-        или войдите через бота Fate в Telegram
-      </div>
-      <button type="button" className="btn" onClick={startBotFlow} disabled={loading}>
+      {widgetAllowed && (
+        <>
+          <TelegramLoginButton onSuccess={handleSuccess} />
+          <div className="text-center text-sm text-muted">
+            или войдите через бота Fate в Telegram
+          </div>
+        </>
+      )}
+      <button type="button" className="btn w-full justify-center" onClick={startBotFlow} disabled={loading}>
         {loading ? "Ждём подтверждения..." : "Открыть бота для входа"}
       </button>
       {status && <div className="text-sm text-muted text-center">{status}</div>}

@@ -84,8 +84,8 @@ export default function Register() {
               />
             </div>
             {err && <div className="text-red-600">{err}</div>}
-            <div className="flex gap-2 items-center pt-1">
-              <button className="btn primary" type="submit">
+            <div className="pt-1">
+              <button className="btn primary w-full justify-center" type="submit">
                 Создать аккаунт
               </button>
             </div>
