@@ -8,7 +8,8 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://217.26.29.186',   // или твой домен, если уже есть
+        target: 'https://my-fate.ru',
+        // legacy target: 'http://217.26.29.186',   // или твой домен, если уже есть
         changeOrigin: false,               // оставляем Origin = http://localhost:5173
         secure: false
       }
