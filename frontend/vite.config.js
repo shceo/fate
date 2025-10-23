@@ -1,6 +1,7 @@
-// vite.config.js / vite.config.ts
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+const target = process.env.API_PROXY_TARGET || 'https://my-fate.ru';
 
 export default defineConfig({
   plugins: [react()],
@@ -8,12 +9,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://my-fate.ru',
-        // legacy target: 'http://217.26.29.186',   // или твой домен, если уже есть
-        changeOrigin: false,               // оставляем Origin = http://localhost:5173
-        secure: false
-      }
-    }
+        target,
+        changeOrigin: false,
+        secure: false,
+      },
+    },
   },
-  build: { outDir: 'dist' }
-})
+  build: { outDir: 'dist' },
+});

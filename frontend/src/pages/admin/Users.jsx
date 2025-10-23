@@ -111,6 +111,13 @@ export default function Users() {
     }
   };
 
+  const dialogUserEmailPart =
+    dialogUser &&
+    typeof dialogUser.email === "string" &&
+    dialogUser.email.trim().length
+      ? ` (${dialogUser.email.trim()})`
+      : "";
+
   const confirmMessage = dialogUser ? (
     <div className="space-y-3 text-muted leading-relaxed">
       <p>
@@ -118,7 +125,7 @@ export default function Users() {
           dialogUser.name && dialogUser.name.trim().length
             ? dialogUser.name
             : "без имени"
-        } (${dialogUser.email})? Это действие необратимо.`}
+        }${dialogUserEmailPart}? Это действие необратимо.`}
       </p>
       <p>Будут стерты ответы, вопросы и связанные данные пользователя.</p>
       {deleteError && (

@@ -36,6 +36,9 @@ export default function QA() {
   const indexRef = useRef(0);
   const renderedValueRef = useRef("");
   const inputFrameRef = useRef(null);
+  const autoSaveTimerRef = useRef(null);
+  const autoSavingRef = useRef(false);
+  const pendingAutoSaveRef = useRef(false);
 
   useEffect(() => {
     if (questions.length === 0) {
@@ -67,6 +70,61 @@ export default function QA() {
     inputFrameRef.current = null;
   }, []);
 
+  const cancelAutoSave = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+  }, []);
+
+  const runAutoSave = useCallback(async () => {
+    cancelAutoSave();
+    if (
+      interviewLocked ||
+      loading ||
+      !loaded ||
+      !questions.length
+    ) {
+      pendingAutoSaveRef.current = false;
+      return;
+    }
+    if (autoSavingRef.current || busy) {
+      if (typeof window !== "undefined") {
+        autoSaveTimerRef.current = window.setTimeout(runAutoSave, 1200);
+      }
+      return;
+    }
+    autoSavingRef.current = true;
+    pendingAutoSaveRef.current = false;
+    try {
+      await saveAnswers();
+    } catch (error) {
+      console.error("Auto-save failed", error);
+      pendingAutoSaveRef.current = true;
+      if (typeof window !== "undefined") {
+        autoSaveTimerRef.current = window.setTimeout(runAutoSave, 5000);
+      }
+    } finally {
+      autoSavingRef.current = false;
+    }
+  }, [busy, cancelAutoSave, interviewLocked, loaded, loading, questions.length, saveAnswers]);
+
+  const scheduleAutoSave = useCallback(() => {
+    if (
+      interviewLocked ||
+      loading ||
+      !loaded ||
+      !questions.length
+    ) {
+      return;
+    }
+    pendingAutoSaveRef.current = true;
+    if (typeof window === "undefined") return;
+    cancelAutoSave();
+    autoSaveTimerRef.current = window.setTimeout(runAutoSave, 1200);
+  }, [cancelAutoSave, interviewLocked, loaded, loading, questions.length, runAutoSave]);
+
   const readTextareaValue = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) return false;
@@ -94,8 +152,16 @@ export default function QA() {
         return;
       }
       updateAnswer(targetIndex, draftRef.current);
+      scheduleAutoSave();
     },
-    [cancelInputFrame, cancelPendingSync, questions, readTextareaValue, updateAnswer],
+    [
+      cancelInputFrame,
+      cancelPendingSync,
+      questions,
+      readTextareaValue,
+      scheduleAutoSave,
+      updateAnswer,
+    ],
   );
 
   const scheduleSync = useCallback(() => {
@@ -159,8 +225,22 @@ export default function QA() {
   useEffect(() => {
     return () => {
       flushPendingAnswer();
+      cancelAutoSave();
+      if (pendingAutoSaveRef.current && !interviewLocked) {
+        pendingAutoSaveRef.current = false;
+        saveAnswers().catch((error) => {
+          console.error("Failed to save answers before leaving", error);
+        });
+      }
     };
-  }, [flushPendingAnswer]);
+  }, [cancelAutoSave, flushPendingAnswer, interviewLocked, saveAnswers]);
+
+  useEffect(() => {
+    if (interviewLocked) {
+      cancelAutoSave();
+      pendingAutoSaveRef.current = false;
+    }
+  }, [cancelAutoSave, interviewLocked]);
 
   const showToast = (message) => {
     setToast(message);
@@ -174,6 +254,8 @@ export default function QA() {
     try {
       setBusy(true);
       await saveAnswers();
+      pendingAutoSaveRef.current = false;
+      cancelAutoSave();
       if (withSuccessToast) {
         showToast("Ответы сохранены");
       }

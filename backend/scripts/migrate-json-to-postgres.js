@@ -32,7 +32,11 @@ async function main() {
       const id = user.id;
       if (!id) continue;
 
-      const email = String(user.email ?? '').trim().toLowerCase();
+      const emailRaw = typeof user.email === 'string' ? user.email.trim() : '';
+      const email =
+        emailRaw && !emailRaw.toLowerCase().endsWith('@telegram.local')
+          ? emailRaw.toLowerCase()
+          : null;
       const name = String(user.name ?? '').trim() || 'unknown';
       const passHash = user.passHash ?? user.pass_hash;
       if (!passHash) continue;

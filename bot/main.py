@@ -1,4 +1,4 @@
-import asyncio
+import asyncio 
 import logging
 import os
 from pathlib import Path
@@ -31,7 +31,7 @@ load_dotenv(BASE_DIR / ".env")
 BOT_TOKEN = os.environ.get("TG_BOT_TOKEN")
 BOT_SECRET = os.environ.get("TG_BOT_INTERNAL_SECRET")
 API_BASE = os.environ.get("API_BASE", "http://localhost:8787").rstrip("/")
-SITE_URL = os.environ.get("SITE_URL", "http://localhost:5173").rstrip("/")
+SITE_URL = os.environ.get("SITE_URL", "https://my-fate.ru").rstrip("/")
 
 if not BOT_TOKEN:
     raise RuntimeError("TG_BOT_TOKEN environment variable is required")
@@ -81,20 +81,24 @@ def contact_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup([[button]], resize_keyboard=True, one_time_keyboard=True)
 
 
-def site_keyboard() -> InlineKeyboardMarkup:
-    button = InlineKeyboardButton("Открыть сайт", url=SITE_URL)
+def site_keyboard(text: str = "Открыть сайт") -> InlineKeyboardMarkup:
+    button = InlineKeyboardButton(text, url=SITE_URL)
     return InlineKeyboardMarkup([[button]])
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
     args = context.args
+
+    # Без кода — показываем приветствие + инлайн-кнопку на сайт
     if not args:
         await message.reply_text(
-            "Передайте code/nonce после команды, например: /start <код_из_сайта>."
+            "Здравствуйте! Я помогу познакомиться с сервисом и оформить заказ.\n"
+            "Нажмите «Открыть сайт», чтобы посмотреть услуги, примеры и условия. "
+            "Если вы уже на сайте — продолжайте там, мы вас узнаем автоматически",
+            reply_markup=site_keyboard("Открыть сайт"),
         )
         return
-
     nonce = args[0]
     context.user_data["nonce"] = nonce
 
@@ -108,22 +112,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     await message.reply_text(
-        (
-            "Здравствуйте! Я помогу познакомиться с сервисом и оформить заказ.\n"
-            "Нажмите «Открыть сайт», чтобы посмотреть услуги, примеры и условия.\n"
-            "Если вы уже на сайте — продолжайте там, мы вас узнаем автоматически."
-        ),
-        reply_markup=site_keyboard(),
-        disable_web_page_preview=True,
-    )
-    await message.reply_text(
+        "Отлично! Авторизация прошла.\n"
+        "Вернитесь на сайт по кнопке ниже.\n"
         "Чтобы мы могли оперативно связаться, отправьте номер кнопкой ниже (по желанию).",
+        reply_markup=site_keyboard("Вернуться на сайт"),
+    )
+
+    # Отдельным сообщением — клавиатура для отправки телефона
+    await message.reply_text(
+        "Отправьте номер (по желанию):",
         reply_markup=contact_keyboard(),
     )
-
-
-
-
 
 
 async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -156,23 +155,15 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     await update.effective_message.reply_text(
-        (
-            "Отлично! Авторизация прошла.\n"
-            "Вернитесь на сайт по кнопке ниже.\n"
-            "Чтобы мы могли оперативно связаться, отправьте номер кнопкой ниже (по желанию)."
-        ),
-        reply_markup=site_keyboard(),
-        disable_web_page_preview=True,
-    )
-    await update.effective_message.reply_text(
-        "Спасибо! Если клавиатура осталась, можете скрыть её кнопкой ниже.",
+        "Спасибо! Телефон обновлён. Можно закрыть диалог.",
         reply_markup=ReplyKeyboardRemove(),
     )
 
 
 async def help_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
-        "Для входа откройте ссылку с сайта, бот автоматически подтвердит авторизацию."
+        "Чтобы просто посмотреть услуги — нажмите «Открыть сайт». "
+        "Для входа откройте ссылку с сайта — бот подтвердит авторизацию автоматически."
     )
 
 

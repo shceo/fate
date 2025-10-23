@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS app_users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  email TEXT NOT NULL,
+  email TEXT,
   pass_hash TEXT NOT NULL,
   is_admin BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS app_users (
 
 CREATE UNIQUE INDEX IF NOT EXISTS app_users_email_lower_key
   ON app_users (LOWER(email));
+
+ALTER TABLE app_users
+  ALTER COLUMN email DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS user_questions (
   id BIGSERIAL PRIMARY KEY,

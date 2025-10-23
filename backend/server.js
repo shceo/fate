@@ -92,7 +92,7 @@ const answersSchema = z.object({
     .array(
       z.object({
         questionIndex: z.coerce.number().int().min(0),
-        text: z.string().max(5000)
+        text: z.string().max(100000)
       })
     )
     .max(500)
@@ -202,6 +202,15 @@ async function ensureSchema() {
   await query(sql);
 }
 
+async function normalizeTelegramEmails() {
+  await query(
+    `UPDATE app_users
+     SET email = NULL
+     WHERE email IS NOT NULL
+       AND email ILIKE 'tg%@telegram.local'`
+  );
+}
+
 async function seedAdmin() {
   const emailRaw = process.env.SEED_ADMIN_EMAIL;
   const pass = process.env.SEED_ADMIN_PASSWORD;
@@ -294,12 +303,26 @@ function mapTelegram(row) {
   };
 }
 
+function normalizeUserEmail(email) {
+  if (typeof email !== 'string') {
+    return email ?? null;
+  }
+  const trimmed = email.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.toLowerCase().endsWith('@telegram.local')) {
+    return null;
+  }
+  return trimmed;
+}
+
 function presentUser(row) {
   const status = row.status ?? null;
   return {
     id: row.id,
     name: row.name,
-    email: row.email,
+    email: normalizeUserEmail(row.email),
     isAdmin: !!row.is_admin,
     cover: row.cover ?? null,
     ordered: !!row.ordered,
@@ -426,7 +449,6 @@ async function findOrCreateUserFromTelegram(tg, { phone } = {}) {
       : username
         ? `@${username}`
         : `Telegram user ${telegramId}`;
-    const email = `tg${telegramId}@telegram.local`;
     const randomPass = crypto.randomBytes(32).toString('hex');
     const passHash = await bcrypt.hash(randomPass, 12);
     const id = nanoid();
@@ -437,7 +459,7 @@ async function findOrCreateUserFromTelegram(tg, { phone } = {}) {
        )
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING ${BASE_USER_FIELDS}`,
-      [id, displayName, email, passHash, telegramId, username, firstName, lastName, phone ?? null]
+      [id, displayName, null, passHash, telegramId, username, firstName, lastName, phone ?? null]
     );
     user = rows[0];
   } else {
@@ -1196,6 +1218,7 @@ app.use((err, _req, res, _next) => {
 
 const bootstrap = (async () => {
   await ensureSchema();
+  await normalizeTelegramEmails();
   await seedAdmin();
 })();
 
