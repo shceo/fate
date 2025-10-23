@@ -67,13 +67,21 @@ async function main() {
         ? data.userQuestions[id]
         : [];
       await client.query('DELETE FROM user_questions WHERE user_id = $1', [id]);
+      await client.query('DELETE FROM user_question_chapters WHERE user_id = $1', [id]);
+      const chapterInsert = await client.query(
+        `INSERT INTO user_question_chapters (user_id, position, title)
+         VALUES ($1, 0, NULL)
+         RETURNING id`,
+        [id]
+      );
+      const chapterId = chapterInsert.rows[0]?.id;
       for (let index = 0; index < questions.length; index += 1) {
         const text = String(questions[index] ?? '').trim();
         if (!text) continue;
         await client.query(
-          `INSERT INTO user_questions (user_id, position, text)
-           VALUES ($1, $2, $3)`,
-          [id, index, text]
+          `INSERT INTO user_questions (user_id, chapter_id, position, chapter_position, text)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [id, chapterId, index, index, text]
         );
         questionsMigrated += 1;
       }

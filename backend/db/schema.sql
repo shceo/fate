@@ -19,15 +19,40 @@ CREATE UNIQUE INDEX IF NOT EXISTS app_users_email_lower_key
 ALTER TABLE app_users
   ALTER COLUMN email DROP NOT NULL;
 
-CREATE TABLE IF NOT EXISTS user_questions (
+CREATE TABLE IF NOT EXISTS user_question_chapters (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES app_users (id) ON DELETE CASCADE,
   position INTEGER NOT NULL,
+  title TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_question_chapters_user_position_key
+  ON user_question_chapters (user_id, position);
+
+CREATE TABLE IF NOT EXISTS user_questions (
+  id BIGSERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES app_users (id) ON DELETE CASCADE,
+  chapter_id BIGINT REFERENCES user_question_chapters (id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  chapter_position INTEGER NOT NULL,
   text TEXT NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS user_questions_user_position_key
   ON user_questions (user_id, position);
+
+ALTER TABLE user_questions
+  ADD COLUMN IF NOT EXISTS chapter_id BIGINT REFERENCES user_question_chapters (id) ON DELETE CASCADE;
+
+ALTER TABLE user_questions
+  ADD COLUMN IF NOT EXISTS chapter_position INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS user_questions_chapter_position_idx
+  ON user_questions (chapter_id, chapter_position);
+
+UPDATE user_questions
+SET chapter_position = position
+WHERE chapter_position IS NULL;
 
 CREATE TABLE IF NOT EXISTS answers (
   id BIGSERIAL PRIMARY KEY,

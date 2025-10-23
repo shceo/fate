@@ -17,6 +17,7 @@ export function QuestionsProvider({ children }) {
   const interviewLocked = Boolean(user?.status);
   const answersRef = useRef({});
   const [questions, setQuestions] = useState([]);
+  const [chapters, setChapters] = useState([]);
   const [answersMeta, setAnswersMeta] = useState({});
   const [answersVersion, setAnswersVersion] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -25,6 +26,7 @@ export function QuestionsProvider({ children }) {
 
   const resetState = useCallback(() => {
     setQuestions([]);
+    setChapters([]);
     answersRef.current = {};
     setAnswersMeta({});
     setAnswersVersion((prev) => prev + 1);
@@ -61,10 +63,45 @@ export function QuestionsProvider({ children }) {
         }
       });
 
-      const preparedQuestions = Array.isArray(questionsPayload)
-        ? questionsPayload
-        : [];
+      let preparedQuestions = [];
+      let preparedChapters = [];
+
+      if (Array.isArray(questionsPayload)) {
+        preparedQuestions = questionsPayload;
+      } else if (questionsPayload && typeof questionsPayload === "object") {
+        const rawQuestions = Array.isArray(questionsPayload.questions)
+          ? questionsPayload.questions
+          : [];
+        preparedQuestions = rawQuestions.map((entry) => {
+          if (typeof entry === "string") return entry;
+          if (entry && typeof entry.text === "string") return entry.text;
+          return "";
+        });
+        preparedChapters = Array.isArray(questionsPayload.chapters)
+          ? questionsPayload.chapters.map((chapter) => ({
+              id: chapter.id ?? null,
+              title: chapter.title ?? "",
+              position: Number(chapter.position ?? 0),
+              questionCount: Number(chapter.questionCount ?? 0),
+              startIndex: Number(chapter.startIndex ?? 0),
+            }))
+          : [];
+      }
+
+      if (!preparedChapters.length) {
+        preparedChapters = [
+          {
+            id: null,
+            title: "",
+            position: 0,
+            questionCount: preparedQuestions.length,
+            startIndex: 0,
+          },
+        ];
+      }
+
       answersRef.current = normalized;
+      setChapters(preparedChapters);
       const nextMeta = {};
       Object.keys(normalized).forEach((key) => {
         const num = Number(key);
@@ -82,6 +119,7 @@ export function QuestionsProvider({ children }) {
       console.error("Failed to load questions:", error);
       if (!isActive) return;
       setQuestions([]);
+      setChapters([]);
       setAnswersMeta({});
       answersRef.current = {};
       setAnswersVersion((prev) => prev + 1);
@@ -192,6 +230,7 @@ export function QuestionsProvider({ children }) {
       interviewLocked,
       reload: load,
       answersVersion,
+      chapters,
     }),
     [
       questions,
@@ -207,6 +246,7 @@ export function QuestionsProvider({ children }) {
       interviewLocked,
       load,
       answersVersion,
+      chapters,
     ],
   );
 

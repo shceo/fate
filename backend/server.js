@@ -11,6 +11,7 @@ import { dirname, join } from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { z } from 'zod';
+import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
 
 import { query, transaction } from './db/client.js';
 
@@ -177,6 +178,228 @@ function normalizeQuestionsInput(payload) {
   }
 
   return normalized;
+}
+
+function getQueryRunner(client) {
+  return client ? client.query.bind(client) : query;
+}
+
+async function resequenceUserQuestions(userId, client) {
+  const run = getQueryRunner(client);
+  const { rows } = await run(
+    `SELECT q.id,
+            q.chapter_id,
+            q.chapter_position,
+            q.position,
+            COALESCE(c.position, 0) AS chapter_order
+     FROM user_questions q
+     LEFT JOIN user_question_chapters c ON c.id = q.chapter_id
+     WHERE q.user_id = $1
+     ORDER BY COALESCE(c.position, 0) ASC, q.chapter_position ASC, q.position ASC, q.id ASC`,
+    [userId]
+  );
+
+  const chapterCounters = new Map();
+  let globalPosition = 0;
+
+  for (const row of rows) {
+    const chapterId = row.chapter_id ?? null;
+    const nextChapterPos = chapterCounters.get(chapterId) ?? 0;
+    if (row.chapter_position !== nextChapterPos) {
+      await run(
+        `UPDATE user_questions
+         SET chapter_position = $2
+         WHERE id = $1`,
+        [row.id, nextChapterPos]
+      );
+    }
+    chapterCounters.set(chapterId, nextChapterPos + 1);
+    if (row.position !== globalPosition) {
+      await run(
+        `UPDATE user_questions
+         SET position = $2
+         WHERE id = $1`,
+        [row.id, globalPosition]
+      );
+    }
+    globalPosition += 1;
+  }
+
+  return globalPosition;
+}
+
+async function ensureUserChapters(userId, client) {
+  const run = getQueryRunner(client);
+  let modified = false;
+
+  let existing = await run(
+    `SELECT id, position, title
+     FROM user_question_chapters
+     WHERE user_id = $1
+     ORDER BY position ASC`,
+    [userId]
+  );
+
+  if (existing.rows.length === 0) {
+    const inserted = await run(
+      `INSERT INTO user_question_chapters (user_id, position, title)
+       VALUES ($1, 0, NULL)
+       RETURNING id, position, title`,
+      [userId]
+    );
+    const defaultChapter = inserted.rows[0];
+    const questions = await run(
+      `SELECT id
+       FROM user_questions
+       WHERE user_id = $1
+       ORDER BY position ASC, id ASC`,
+      [userId]
+    );
+    for (let idx = 0; idx < questions.rows.length; idx += 1) {
+      const question = questions.rows[idx];
+      await run(
+        `UPDATE user_questions
+         SET chapter_id = $2,
+             chapter_position = $3
+         WHERE id = $1`,
+        [question.id, defaultChapter.id, idx]
+      );
+    }
+    modified = true;
+  } else {
+    const missingAssignments = await run(
+      `SELECT id
+       FROM user_questions
+       WHERE user_id = $1
+         AND chapter_id IS NULL
+       ORDER BY position ASC, id ASC`,
+      [userId]
+    );
+    if (missingAssignments.rows.length > 0) {
+      const targetChapterId = existing.rows[0].id;
+      const maxChapterPos = await run(
+        `SELECT COALESCE(MAX(chapter_position), -1) AS max
+         FROM user_questions
+         WHERE chapter_id = $1`,
+        [targetChapterId]
+      );
+      let chapterPos = Number(maxChapterPos.rows[0]?.max ?? -1) + 1;
+      for (const row of missingAssignments.rows) {
+        await run(
+          `UPDATE user_questions
+           SET chapter_id = $2,
+               chapter_position = $3
+           WHERE id = $1`,
+          [row.id, targetChapterId, chapterPos]
+        );
+        chapterPos += 1;
+      }
+      modified = true;
+    }
+  }
+
+  if (modified) {
+    await resequenceUserQuestions(userId, client);
+    existing = await run(
+      `SELECT id, position, title
+       FROM user_question_chapters
+       WHERE user_id = $1
+       ORDER BY position ASC`,
+      [userId]
+    );
+  }
+
+  return existing.rows;
+}
+
+async function loadUserQuestionMap(userId, client) {
+  const run = getQueryRunner(client);
+  await ensureUserChapters(userId, client);
+  await resequenceUserQuestions(userId, client);
+
+  const { rows } = await run(
+    `SELECT
+       c.id AS chapter_id,
+       c.position AS chapter_position,
+       c.title AS chapter_title,
+       q.id AS question_id,
+       q.text AS question_text,
+       q.position AS question_position,
+       q.chapter_position AS question_chapter_position
+     FROM user_question_chapters c
+     LEFT JOIN user_questions q
+       ON q.chapter_id = c.id
+     WHERE c.user_id = $1
+     ORDER BY c.position ASC, q.chapter_position ASC, q.position ASC, q.id ASC`,
+    [userId]
+  );
+
+  const chapters = [];
+  const chapterMap = new Map();
+
+  for (const row of rows) {
+    let chapter = chapterMap.get(row.chapter_id);
+    if (!chapter) {
+      chapter = {
+        id: row.chapter_id,
+        position: row.chapter_position ?? 0,
+        title: row.chapter_title ?? null,
+        questions: []
+      };
+      chapterMap.set(row.chapter_id, chapter);
+      chapters.push(chapter);
+    }
+    if (row.question_id) {
+      chapter.questions.push({
+        id: row.question_id,
+        index: row.question_position ?? 0,
+        chapterPosition: row.question_chapter_position ?? chapter.questions.length,
+        text: row.question_text
+      });
+    }
+  }
+
+  chapters.sort((a, b) => a.position - b.position);
+
+  let globalIndex = 0;
+  const flatQuestions = [];
+
+  for (const chapter of chapters) {
+    chapter.questions.sort((a, b) => a.chapterPosition - b.chapterPosition);
+    chapter.startIndex = globalIndex;
+    const normalizedQuestions = [];
+    for (let i = 0; i < chapter.questions.length; i += 1) {
+      const question = chapter.questions[i];
+      const payload = {
+        id: question.id,
+        index: globalIndex,
+        chapterId: chapter.id,
+        chapterPosition: i,
+        text: question.text
+      };
+      normalizedQuestions.push(payload);
+      flatQuestions.push(payload);
+      globalIndex += 1;
+    }
+    chapter.questions = normalizedQuestions;
+    chapter.questionCount = normalizedQuestions.length;
+  }
+
+  return {
+    chapters,
+    flatQuestions,
+    totalQuestions: flatQuestions.length
+  };
+}
+
+async function pruneUserAnswers(userId, totalQuestions, client) {
+  const run = getQueryRunner(client);
+  await run(
+    `DELETE FROM answers
+     WHERE user_id = $1
+       AND question_index >= $2`,
+    [userId, totalQuestions]
+  );
 }
 
 function cookieOpts() {
@@ -771,14 +994,23 @@ app.get(
   '/api/questions',
   authRequired,
   asyncHandler(async (req, res) => {
-    const { rows } = await query(
-      `SELECT text
-       FROM user_questions
-       WHERE user_id = $1
-       ORDER BY position ASC`,
-      [req.user.id]
-    );
-    res.json(rows.map((row) => row.text));
+    const structure = await loadUserQuestionMap(req.user.id);
+    res.json({
+      chapters: structure.chapters.map((chapter) => ({
+        id: chapter.id,
+        position: chapter.position,
+        title: chapter.title,
+        startIndex: chapter.startIndex,
+        questionCount: chapter.questionCount
+      })),
+      questions: structure.flatQuestions.map((entry) => ({
+        id: entry.id,
+        index: entry.index,
+        chapterId: entry.chapterId,
+        chapterPosition: entry.chapterPosition,
+        text: entry.text
+      }))
+    });
   })
 );
 
@@ -1081,13 +1313,7 @@ app.get(
        ORDER BY question_index ASC, created_at ASC`,
       [user.id]
     );
-    const questions = await query(
-      `SELECT text
-       FROM user_questions
-       WHERE user_id = $1
-       ORDER BY position ASC`,
-      [user.id]
-    );
+    const questionStructure = await loadUserQuestionMap(user.id);
     const payload = presentUser(user);
     res.json({
       ...payload,
@@ -1096,8 +1322,190 @@ app.get(
         text: row.answer_text,
         createdAt: row.created_at
       })),
-      questions: questions.rows.map((row) => row.text)
+      questions: questionStructure.flatQuestions.map((entry) => entry.text),
+      chapters: questionStructure.chapters.map((chapter) => ({
+        id: chapter.id,
+        position: chapter.position,
+        title: chapter.title,
+        startIndex: chapter.startIndex,
+        questionCount: chapter.questionCount,
+        questions: chapter.questions.map((question) => ({
+          id: question.id,
+          index: question.index,
+          chapterPosition: question.chapterPosition,
+          text: question.text
+        }))
+      }))
     });
+  })
+);
+
+app.get(
+  '/api/admin/users/:id/export/answers',
+  authRequired,
+  adminRequired,
+  asyncHandler(async (req, res) => {
+    const userRow = await fetchUserById(req.params.id);
+    if (!userRow) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+
+    const answersRes = await query(
+      `SELECT question_index, answer_text, created_at
+       FROM answers
+       WHERE user_id = $1
+       ORDER BY question_index ASC, created_at ASC`,
+      [userRow.id]
+    );
+    const answers = answersRes.rows;
+    const questionStructure = await loadUserQuestionMap(userRow.id);
+    const questionMap = new Map(
+      questionStructure.flatQuestions.map((entry) => [entry.index, entry.text])
+    );
+    const user = presentUser(userRow);
+
+    const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    let latestAnswerDate = null;
+    for (const entry of answers) {
+      const stamp = entry.created_at ? new Date(entry.created_at) : null;
+      if (!stamp || Number.isNaN(stamp.getTime())) {
+        continue;
+      }
+      if (!latestAnswerDate || stamp > latestAnswerDate) {
+        latestAnswerDate = stamp;
+      }
+    }
+    const answerDateLabel = latestAnswerDate ? dateFormatter.format(latestAnswerDate) : 'нет данных';
+
+    const contactParts = [];
+    if (user.email) {
+      contactParts.push(`Email: ${user.email}`);
+    }
+
+    const telegram = user.telegram ?? null;
+    const telegramParts = [];
+    if (telegram?.username) {
+      telegramParts.push(`@${telegram.username}`);
+    }
+    const telegramName = [telegram?.first_name, telegram?.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (telegramName) {
+      telegramParts.push(telegramName);
+    }
+    if (telegram?.phone) {
+      telegramParts.push(telegram.phone);
+    }
+    if (telegram?.id) {
+      telegramParts.push(`ID: ${telegram.id}`);
+    }
+    if (telegramParts.length) {
+      contactParts.push(`Telegram: ${telegramParts.join(' | ')}`);
+    }
+    const contactsLabel = contactParts.length ? contactParts.join('; ') : '—';
+
+    const docChildren = [
+      new Paragraph({
+        text: 'Ответы пользователя',
+        heading: HeadingLevel.HEADING1
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Дата ответов: ', bold: true }),
+          new TextRun({ text: answerDateLabel })
+        ]
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'ФИО: ', bold: true }),
+          new TextRun({ text: user.name || '—' })
+        ]
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Контакты: ', bold: true }),
+          new TextRun({ text: contactsLabel })
+        ],
+        spacing: { after: 300 }
+      })
+    ];
+
+    if (answers.length === 0) {
+      docChildren.push(
+        new Paragraph({
+          text: 'Ответы пока не сохранены.'
+        })
+      );
+    } else {
+      answers.forEach((entry) => {
+        const rawIndex = Number(entry.question_index);
+        const questionIndex = Number.isFinite(rawIndex) ? rawIndex : 0;
+        const questionText = questionMap.get(questionIndex) ?? `Вопрос ${questionIndex + 1}`;
+
+        docChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${questionIndex + 1}. ${questionText}`,
+                bold: true
+              })
+            ],
+            spacing: { after: 120 }
+          })
+        );
+
+        const runs = [];
+        const answerText = typeof entry.answer_text === 'string' ? entry.answer_text : '';
+        const normalized = answerText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimEnd();
+
+        if (!normalized.length) {
+          runs.push(new TextRun({ text: '—' }));
+        } else {
+          const lines = normalized.split('\n');
+          lines.forEach((line, index) => {
+            if (index > 0) {
+              runs.push(new TextRun({ break: 1 }));
+            }
+            runs.push(new TextRun({ text: line }));
+          });
+        }
+
+        docChildren.push(
+          new Paragraph({
+            children: runs,
+            spacing: { after: 300 }
+          })
+        );
+      });
+    }
+
+    const document = new Document({
+      sections: [
+        {
+          properties: {},
+          children: docChildren
+        }
+      ]
+    });
+
+    const buffer = await Packer.toBuffer(document);
+    const filename = `answers-${userRow.id}.docx`;
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
   })
 );
 
@@ -1124,6 +1532,44 @@ app.delete(
 );
 
 app.post(
+  '/api/admin/users/:id/chapters',
+  authRequired,
+  adminRequired,
+  csrfRequired,
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    const user = await fetchUserById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    const titleRaw = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+    const chapter = await transaction(async (client) => {
+      await ensureUserChapters(user.id, client);
+      const maxRes = await client.query(
+        `SELECT COALESCE(MAX(position), -1) AS max
+         FROM user_question_chapters
+         WHERE user_id = $1`,
+        [user.id]
+      );
+      const nextPosition = Number(maxRes.rows[0]?.max ?? -1) + 1;
+      const inserted = await client.query(
+        `INSERT INTO user_question_chapters (user_id, position, title)
+         VALUES ($1, $2, $3)
+         RETURNING id, position, title`,
+        [user.id, nextPosition, titleRaw.length ? titleRaw : null]
+      );
+      await resequenceUserQuestions(user.id, client);
+      return inserted.rows[0];
+    });
+    res.status(201).json({
+      id: chapter.id,
+      position: chapter.position,
+      title: chapter.title
+    });
+  })
+);
+
+app.post(
   '/api/admin/users/:id/questions',
   authRequired,
   adminRequired,
@@ -1132,42 +1578,110 @@ app.post(
   asyncHandler(async (req, res) => {
     const modeRaw = typeof req.body?.mode === 'string' ? req.body.mode : 'append';
     const mode = modeRaw === 'replace' ? 'replace' : 'append';
+    const chapterIdRaw = req.body?.chapterId;
+    const chapterId =
+      typeof chapterIdRaw === 'number'
+        ? chapterIdRaw
+        : Number.parseInt(typeof chapterIdRaw === 'string' ? chapterIdRaw : '', 10);
     const questions = normalizeQuestionsInput(req.body);
+    if (!Number.isInteger(chapterId)) {
+      return res.status(400).json({ error: 'INVALID_CHAPTER' });
+    }
+    if (questions.length === 0 && mode === 'append') {
+      return res.status(400).json({ error: 'NO_QUESTIONS' });
+    }
 
     const user = await fetchUserById(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'NOT_FOUND' });
     }
 
-    let total = 0;
-    await transaction(async (client) => {
-      if (mode === 'replace') {
-        await client.query('DELETE FROM user_questions WHERE user_id = $1', [user.id]);
-      }
-      let startIndex = 0;
-      if (mode === 'append') {
-        const maxPosition = await client.query(
-          'SELECT COALESCE(MAX(position), -1) AS max FROM user_questions WHERE user_id = $1',
-          [user.id]
-        );
-        startIndex = Number(maxPosition.rows[0]?.max ?? -1) + 1;
-      }
-      for (let idx = 0; idx < questions.length; idx += 1) {
-        const question = questions[idx];
-        await client.query(
-          `INSERT INTO user_questions (user_id, position, text)
-           VALUES ($1, $2, $3)`,
-          [user.id, startIndex + idx, question]
-        );
-      }
-      const countRes = await client.query(
-        'SELECT COUNT(*)::int AS count FROM user_questions WHERE user_id = $1',
-        [user.id]
+    const result = await transaction(async (client) => {
+      await ensureUserChapters(user.id, client);
+      const chapterRes = await client.query(
+        `SELECT id
+         FROM user_question_chapters
+         WHERE id = $1
+           AND user_id = $2`,
+        [chapterId, user.id]
       );
-      total = countRes.rows[0]?.count ?? 0;
+      if (chapterRes.rowCount === 0) {
+        const err = new Error('CHAPTER_NOT_FOUND');
+        err.status = 404;
+        throw err;
+      }
+
+      if (mode === 'replace') {
+        await client.query('DELETE FROM user_questions WHERE chapter_id = $1', [chapterId]);
+      }
+
+      let chapterPositionStart = 0;
+      if (mode === 'append') {
+        const maxRes = await client.query(
+          `SELECT COALESCE(MAX(chapter_position), -1) AS max
+           FROM user_questions
+           WHERE chapter_id = $1`,
+          [chapterId]
+        );
+        chapterPositionStart = Number(maxRes.rows[0]?.max ?? -1) + 1;
+      }
+
+      for (let idx = 0; idx < questions.length; idx += 1) {
+        await client.query(
+          `INSERT INTO user_questions (user_id, chapter_id, position, chapter_position, text)
+           VALUES ($1, $2, 0, $3, $4)`,
+          [user.id, chapterId, mode === 'append' ? chapterPositionStart + idx : idx, questions[idx]]
+        );
+      }
+
+      const total = await resequenceUserQuestions(user.id, client);
+      await pruneUserAnswers(user.id, total, client);
+
+      return {
+        total
+      };
     });
 
-    res.json({ ok: true, count: total });
+    res.json({ ok: true, count: result.total });
+  })
+);
+
+app.delete(
+  '/api/admin/users/:id/questions/:questionId',
+  authRequired,
+  adminRequired,
+  csrfRequired,
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    const user = await fetchUserById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    const questionId = Number.parseInt(req.params.questionId, 10);
+    if (!Number.isInteger(questionId)) {
+      return res.status(400).json({ error: 'INVALID_QUESTION' });
+    }
+
+    const result = await transaction(async (client) => {
+      const existing = await client.query(
+        `SELECT id
+         FROM user_questions
+         WHERE id = $1
+           AND user_id = $2`,
+        [questionId, user.id]
+      );
+      if (existing.rowCount === 0) {
+        const err = new Error('QUESTION_NOT_FOUND');
+        err.status = 404;
+        throw err;
+      }
+      await client.query('DELETE FROM user_questions WHERE id = $1', [questionId]);
+      const total = await resequenceUserQuestions(user.id, client);
+      await pruneUserAnswers(user.id, total, client);
+      return { total };
+    });
+
+    res.json({ ok: true, count: result.total });
   })
 );
 

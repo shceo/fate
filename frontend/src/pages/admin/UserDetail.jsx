@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { apiPost } from "../../shared/api.js";
+import ExpandableText from "../../components/ExpandableText.jsx";
 
 function sanitizeTemplateQuestions(list) {
   return (Array.isArray(list) ? list : [])
@@ -36,6 +37,8 @@ export default function UserDetail() {
   const [editableTemplateQuestions, setEditableTemplateQuestions] = useState([]);
   const [templateActionBusy, setTemplateActionBusy] = useState(false);
   const [templateActionError, setTemplateActionError] = useState(null);
+  const [exportingAnswers, setExportingAnswers] = useState(false);
+  const [exportError, setExportError] = useState(null);
   const cleanedEditableQuestions = useMemo(
     () => sanitizeTemplateQuestions(editableTemplateQuestions),
     [editableTemplateQuestions]
@@ -70,6 +73,50 @@ export default function UserDetail() {
     await apiPost(`/api/admin/users/${id}/status`, { status: status || null });
     await reload();
   };
+
+  const handleExportAnswers = useCallback(async () => {
+    if (exportingAnswers) {
+      return;
+    }
+    setExportError(null);
+    setExportingAnswers(true);
+    let objectUrl = "";
+    try {
+      const response = await fetch(`/api/admin/users/${id}/export/answers`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("EXPORT_FAILED");
+      }
+      const blob = await response.blob();
+      objectUrl = window.URL.createObjectURL(blob);
+      const rawName =
+        typeof data?.name === "string" && data.name.trim().length
+          ? data.name.trim()
+          : `user_${id}`;
+      const normalizedName = rawName
+        .replace(/[^A-Za-z0-9_-]+/g, "_")
+        .replace(/_{2,}/g, "_")
+        .replace(/^_+|_+$/g, "");
+      const fileBase = normalizedName || `user_${id}`;
+      const dateStamp = new Date().toISOString().split("T")[0];
+
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `answers-${fileBase}-${dateStamp}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Failed to export answers", error);
+      setExportError("Не удалось выгрузить ответы. Попробуйте ещё раз.");
+    } finally {
+      if (objectUrl) {
+        window.URL.revokeObjectURL(objectUrl);
+      }
+      setExportingAnswers(false);
+    }
+  }, [data?.name, exportingAnswers, id]);
 
   const pushQuestions = async () => {
     const body = {
@@ -662,21 +709,32 @@ export default function UserDetail() {
           </div>
         </section>
 
-        <section className="paper p-4">
-          <h3 className="font-serif text-xl mb-2">Ответы пользователя</h3>
+        <section className="paper p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h3 className="font-serif text-xl">Ответы пользователя</h3>
+            <button
+              type="button"
+              className="btn text-sm px-4 py-2"
+              onClick={handleExportAnswers}
+              disabled={exportingAnswers}
+            >
+              {exportingAnswers ? "Экспорт..." : "Экспорт в Word"}
+            </button>
+          </div>
+          {exportError ? (
+            <div className="text-sm text-[#b2563f]">{exportError}</div>
+          ) : null}
           <div className="space-y-3">
             {data.answers?.length ? (
-              data.answers.map((a, i) => (
+              data.answers.map((answer, index) => (
                 <div
-                  key={i}
+                  key={index}
                   className="p-3 border border-line rounded-[14px] bg-paper"
                 >
                   <div className="text-muted text-sm mb-1">
-                    Вопрос {a.questionIndex + 1}
+                    Вопрос {answer.questionIndex + 1}
                   </div>
-                  <div className="whitespace-pre-wrap break-words">
-                    {a.text || "-"}
-                  </div>
+                  <ExpandableText text={answer.text} />
                 </div>
               ))
             ) : (
