@@ -23,6 +23,29 @@ const STATUS_OPTIONS = [
   { value: "delivered", label: "Доставлено" },
 ];
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const deadlineDateFormatter = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function formatDaysLabel(value) {
+  const abs = Math.abs(value);
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${value} день`;
+  }
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
+    return `${value} дня`;
+  }
+  return `${value} дней`;
+}
+
 export default function UserDetail() {
   const { id } = useParams();
   const [data, setData] = useState(null);
@@ -133,6 +156,54 @@ export default function UserDetail() {
       return acc + chapter.questions.length;
     }, 0);
   }, [chapters]);
+
+  const answersSubmittedAt = useMemo(() => {
+    if (!data?.interviewLocked) return null;
+    if (!Array.isArray(data?.answers) || data.answers.length === 0) return null;
+    let latest = null;
+    for (const entry of data.answers) {
+      if (!entry || !entry.createdAt) continue;
+      const stamp = new Date(entry.createdAt);
+      if (Number.isNaN(stamp.getTime())) continue;
+      if (!latest || stamp > latest) {
+        latest = stamp;
+      }
+    }
+    return latest;
+  }, [data?.answers, data?.interviewLocked]);
+
+  const answerDeadlineInfo = useMemo(() => {
+    if (!answersSubmittedAt) return null;
+    const totalDays = 14;
+    const now = new Date();
+    const diff = now.getTime() - answersSubmittedAt.getTime();
+    const elapsedDays = diff > 0 ? Math.floor(diff / DAY_MS) : 0;
+    const remainingDays = Math.max(0, totalDays - elapsedDays);
+    const deadlineDate = new Date(answersSubmittedAt.getTime() + totalDays * DAY_MS);
+    const overdue = now > deadlineDate;
+    const overdueDays = overdue
+      ? Math.max(
+          0,
+          Math.floor((now.getTime() - deadlineDate.getTime()) / DAY_MS)
+        )
+      : 0;
+    let tone = "green";
+    if (elapsedDays >= 10 || overdue) {
+      tone = "red";
+    } else if (elapsedDays >= 4) {
+      tone = "orange";
+    }
+    return {
+      now,
+      elapsedDays,
+      remainingDays,
+      deadlineDate,
+      tone,
+      totalDays,
+      overdue,
+      overdueDays,
+    };
+  }, [answersSubmittedAt]);
 
   const formatChapterTitle = useCallback((chapter, index) => {
     const rawTitle = typeof chapter?.title === "string" ? chapter.title.trim() : "";
@@ -376,6 +447,45 @@ export default function UserDetail() {
   const tgName = tgNameRaw && tgNameRaw.trim().length ? tgNameRaw.trim() : "-";
   const tgId = telegram?.id ?? "-";
   const tgPhone = telegram?.phone ?? "-";
+
+  const deadlineToneClass = answerDeadlineInfo
+    ? answerDeadlineInfo.tone === "green"
+      ? "bg-[#dce6d5] border border-[#c2d6ba] text-[#2f4f2f]"
+      : answerDeadlineInfo.tone === "orange"
+      ? "bg-[#f6e3cc] border border-[#e4c49b] text-[#7a4f24]"
+      : "bg-[#f8d9d6] border border-[#e9b4ac] text-[#7f2d2d]"
+    : data.interviewLocked
+    ? "bg-[#efe4d8] border border-[#dfc8b5] text-[#6c5b4a]"
+    : "bg-[#efe7dd] border border-dashed border-[#d8c9b8] text-[#7a6f64]";
+
+  let deadlinePrimaryText = "";
+  let deadlineSecondaryText = null;
+  if (answerDeadlineInfo && answersSubmittedAt) {
+    if (answerDeadlineInfo.overdue) {
+      const overdueLabel = answerDeadlineInfo.overdueDays
+        ? `${formatDaysLabel(answerDeadlineInfo.overdueDays)} назад`
+        : "сегодня";
+      deadlinePrimaryText = `Срок истёк ${overdueLabel}.`;
+    } else {
+      deadlinePrimaryText = `Завершить до ${deadlineDateFormatter.format(
+        answerDeadlineInfo.deadlineDate
+      )} · осталось ${formatDaysLabel(answerDeadlineInfo.remainingDays)}.`;
+    }
+    deadlineSecondaryText = `Ответы отправлены ${deadlineDateFormatter.format(
+      answersSubmittedAt
+    )} · прошло ${formatDaysLabel(answerDeadlineInfo.elapsedDays)}.`;
+  } else if (data.interviewLocked) {
+    deadlinePrimaryText = "Ответы отправлены, ожидается подтверждение даты.";
+    deadlineSecondaryText =
+      "Цветовая индикация обновится после получения отметки времени.";
+  } else {
+    deadlinePrimaryText = "Ответы ещё не отправлены пользователем.";
+    deadlineSecondaryText =
+      "Контроль сроков начнётся после полной отправки ответов.";
+  }
+  const deadlineFooterText = `Общий срок: ${formatDaysLabel(
+    answerDeadlineInfo?.totalDays ?? 14
+  )}.`;
 
   const modeHint =
     mode === "replace"
@@ -822,6 +932,17 @@ export default function UserDetail() {
           <button className="btn mt-2" onClick={saveStatus}>
             Сохранить статус
           </button>
+        </div>
+
+        <div className={`rounded-[14px] p-3 leading-snug ${deadlineToneClass}`}>
+          <div className="text-xs uppercase tracking-wide font-semibold opacity-80">
+            Срок по ответам
+          </div>
+          <div className="text-sm font-medium mt-1">{deadlinePrimaryText}</div>
+          {deadlineSecondaryText ? (
+            <div className="text-xs mt-1 opacity-80">{deadlineSecondaryText}</div>
+          ) : null}
+          <div className="text-xs mt-2 opacity-70">{deadlineFooterText}</div>
         </div>
       </aside>
 
