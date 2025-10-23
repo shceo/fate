@@ -37,7 +37,7 @@ function sanitizeIndex(rawIndex, total) {
 
 export default function QA() {
   const navigate = useNavigate();
-  const { refreshUser, setUser } = useAuth();
+  const { refreshUser, setUser, user } = useAuth();
   const {
     questions,
     chapters,
@@ -51,6 +51,7 @@ export default function QA() {
     loading,
     interviewLocked,
     answersVersion,
+    resumeIndex,
   } = useQuestions();
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -69,6 +70,7 @@ export default function QA() {
   const draftRef = useRef("");
   const dirtyRef = useRef(false);
   const editVersionRef = useRef(0);
+  const initialSelectionAppliedRef = useRef(false);
 
   const chapterList = useMemo(() => {
     if (!Array.isArray(chapters)) return [];
@@ -203,6 +205,81 @@ export default function QA() {
       element.setSelectionRange(position, position);
     });
   }, [activeChapterKey, currentIndex]);
+
+  useEffect(() => {
+    if (initialSelectionAppliedRef.current) return;
+    if (!loaded || loading) return;
+    if (!chapterList.length) return;
+    if (!questions.length) {
+      initialSelectionAppliedRef.current = true;
+      return;
+    }
+
+    let storedIndex = null;
+    if (typeof window !== "undefined" && user?.id) {
+      try {
+        const raw = window.localStorage.getItem(
+          `fate:last-position:${user.id}`
+        );
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (
+            parsed &&
+            Number.isFinite(Number(parsed.index))
+          ) {
+            storedIndex = Number(parsed.index);
+          }
+        }
+      } catch (_error) {
+        storedIndex = null;
+      }
+    }
+
+    let targetIndex = storedIndex;
+    if (targetIndex === null && Number.isFinite(resumeIndex)) {
+      targetIndex = resumeIndex;
+    }
+
+    if (targetIndex === null) {
+      initialSelectionAppliedRef.current = true;
+      return;
+    }
+
+    const safeIndex = sanitizeIndex(targetIndex, questions.length);
+    const chapterKey = findChapterKeyForIndex(safeIndex);
+    if (chapterKey === null) {
+      initialSelectionAppliedRef.current = true;
+      return;
+    }
+
+    setActiveChapterKey(chapterKey);
+    setCurrentIndex(safeIndex);
+    initialSelectionAppliedRef.current = true;
+  }, [
+    loaded,
+    loading,
+    chapterList,
+    questions.length,
+    resumeIndex,
+    findChapterKeyForIndex,
+    user?.id,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!user?.id) return;
+    if (!questions.length) return;
+    if (activeChapterKey === null) return;
+    const safeIndex = sanitizeIndex(currentIndex, questions.length);
+    try {
+      window.localStorage.setItem(
+        `fate:last-position:${user.id}`,
+        JSON.stringify({ index: safeIndex })
+      );
+    } catch (_error) {
+      // ignore write errors (storage full, disabled, etc.)
+    }
+  }, [user?.id, currentIndex, questions.length, activeChapterKey]);
 
   const showToast = useCallback((message, tone = "info") => {
     setToast({ message, tone });
@@ -374,6 +451,33 @@ export default function QA() {
       return Math.max(0, questions.length - start);
     },
     [chapterList, questions.length]
+  );
+
+  const findChapterKeyForIndex = useCallback(
+    (index) => {
+      if (!chapterList.length || !questions.length) return null;
+      const safeIndex = sanitizeIndex(index, questions.length);
+      for (let idx = 0; idx < chapterList.length; idx += 1) {
+        const chapter = chapterList[idx];
+        const start = sanitizeIndex(chapter?.startIndex ?? 0, questions.length || 1);
+        const count = computeChapterCount(chapter, idx);
+        if (count <= 0) {
+          continue;
+        }
+        const end = start + count - 1;
+        if (safeIndex >= start && safeIndex <= end) {
+          return chapterKeyFor(chapter, idx);
+        }
+      }
+      const firstChapter = chapterList[0];
+      if (!firstChapter) return null;
+      const firstCount = computeChapterCount(firstChapter, 0);
+      if (firstCount <= 0) {
+        return null;
+      }
+      return chapterKeyFor(firstChapter, 0);
+    },
+    [chapterList, computeChapterCount, questions.length]
   );
 
   const formatChapterTitle = useCallback((chapter, index) => {
@@ -653,4 +757,3 @@ export default function QA() {
     </div>
   );
 }
-

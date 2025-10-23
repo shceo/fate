@@ -23,6 +23,7 @@ export function QuestionsProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
+  const [resumeIndex, setResumeIndex] = useState(null);
 
   const resetState = useCallback(() => {
     setQuestions([]);
@@ -33,6 +34,7 @@ export function QuestionsProvider({ children }) {
     setLoading(false);
     setLoaded(true);
     setLastSaved(null);
+    setResumeIndex(null);
   }, []);
 
   const load = useCallback(async () => {
@@ -123,6 +125,7 @@ export function QuestionsProvider({ children }) {
       setAnswersMeta({});
       answersRef.current = {};
       setAnswersVersion((prev) => prev + 1);
+      setResumeIndex(null);
     } finally {
       if (!isActive) return;
       setLoading(false);
@@ -231,6 +234,7 @@ export function QuestionsProvider({ children }) {
       reload: load,
       answersVersion,
       chapters,
+      resumeIndex,
     }),
     [
       questions,
@@ -247,8 +251,27 @@ export function QuestionsProvider({ children }) {
       load,
       answersVersion,
       chapters,
+      resumeIndex,
     ],
   );
+
+  useEffect(() => {
+    if (!questions.length) {
+      setResumeIndex(null);
+      return;
+    }
+    let nextIndex = null;
+    for (let idx = 0; idx < questions.length; idx += 1) {
+      if (!answersMeta[idx]) {
+        nextIndex = idx;
+        break;
+      }
+    }
+    if (nextIndex === null) {
+      nextIndex = questions.length - 1;
+    }
+    setResumeIndex(nextIndex);
+  }, [questions, answersMeta]);
 
   return (
     <QuestionsContext.Provider value={value}>
