@@ -1,20 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useParams } from "react-router-dom";
-import { apiPost } from "../../shared/api.js";
-import ExpandableText from "../../components/ExpandableText.jsx";
+import { apiDelete, apiPost } from "../../shared/api.js";
 
-function sanitizeTemplateQuestions(list) {
-  return (Array.isArray(list) ? list : [])
+function sanitizeQuestions(source) {
+  return (Array.isArray(source) ? source : [])
     .map((value) => (typeof value === "string" ? value.trim() : ""))
     .filter((value) => value.length);
 }
 
 const STATUS_OPTIONS = [
   { value: "", label: "Без статуса" },
-  { value: "in_review", label: "Редактор изучает материалы" },
-  { value: "in_design", label: "Дизайн и верстка" },
+  { value: "in_review", label: "Материалы на редактуре" },
+  { value: "in_design", label: "Вёрстка и дизайн" },
   { value: "printing", label: "Печать" },
-  { value: "ready", label: "Готово к выдаче" },
+  { value: "ready", label: "Готово к доставке" },
   { value: "shipped", label: "Отправлено" },
   { value: "delivered", label: "Доставлено" },
 ];
@@ -24,45 +28,58 @@ export default function UserDetail() {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("");
   const [ordered, setOrdered] = useState(false);
-  const [qSingle, setQSingle] = useState("");
-  const [qBulk, setQBulk] = useState("");
+
   const [mode, setMode] = useState("append");
-  const [templateModalOpen, setTemplateModalOpen] = useState(false);
-  const [templateStep, setTemplateStep] = useState("pick");
+  const [questionsModalOpen, setQuestionsModalOpen] = useState(false);
+  const [questionTab, setQuestionTab] = useState("manual");
+  const [selectedChapterId, setSelectedChapterId] = useState(null);
+
+  const [manualSingle, setManualSingle] = useState("");
+  const [manualBulk, setManualBulk] = useState("");
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualError, setManualError] = useState(null);
+
+  const [chapterCreateTitle, setChapterCreateTitle] = useState("");
+  const [chapterCreateBusy, setChapterCreateBusy] = useState(false);
+  const [chapterCreateError, setChapterCreateError] = useState(null);
+
+  const [questionsError, setQuestionsError] = useState(null);
+
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templatesError, setTemplatesError] = useState(null);
   const [templatesList, setTemplatesList] = useState([]);
+  const [templateStep, setTemplateStep] = useState("pick");
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [selectedTemplateQuestions, setSelectedTemplateQuestions] = useState([]);
   const [editableTemplateQuestions, setEditableTemplateQuestions] = useState([]);
   const [templateActionBusy, setTemplateActionBusy] = useState(false);
   const [templateActionError, setTemplateActionError] = useState(null);
-  const [exportingAnswers, setExportingAnswers] = useState(false);
-  const [exportError, setExportError] = useState(null);
+
   const cleanedEditableQuestions = useMemo(
-    () => sanitizeTemplateQuestions(editableTemplateQuestions),
+    () => sanitizeQuestions(editableTemplateQuestions),
     [editableTemplateQuestions]
   );
-  const questions = useMemo(() => data?.questions || [], [data]);
-
   useEffect(() => {
     fetch(`/api/admin/users/${id}`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => {
-        setData(d);
-        setStatus(d.status || "");
-        setOrdered(!!d.ordered);
+      .then((response) => response.json())
+      .then((payload) => {
+        setData(payload);
+        setStatus(payload.status || "");
+        setOrdered(Boolean(payload.ordered));
+      })
+      .catch((error) => {
+        console.error("Failed to load user", error);
       });
   }, [id]);
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     const fresh = await fetch(`/api/admin/users/${id}`, {
       credentials: "include",
-    }).then((r) => r.json());
+    }).then((response) => response.json());
     setData(fresh);
     setStatus(fresh.status || "");
-    setOrdered(!!fresh.ordered);
-  };
+    setOrdered(Boolean(fresh.ordered));
+  }, [id]);
 
   const saveOrder = async () => {
     await apiPost(`/api/admin/users/${id}/order`, { ordered });
@@ -74,69 +91,89 @@ export default function UserDetail() {
     await reload();
   };
 
-  const handleExportAnswers = useCallback(async () => {
-    if (exportingAnswers) {
+  const chapters = useMemo(
+    () => (Array.isArray(data?.chapters) ? data.chapters : []),
+    [data]
+  );
+
+  useEffect(() => {
+    if (!chapters.length) {
+      setSelectedChapterId(null);
       return;
     }
-    setExportError(null);
-    setExportingAnswers(true);
-    let objectUrl = "";
-    try {
-      const response = await fetch(`/api/admin/users/${id}/export/answers`, {
-        credentials: "include",
-      });
-      if (!response.ok) {
-        throw new Error("EXPORT_FAILED");
+    setSelectedChapterId((current) => {
+      if (
+        current &&
+        chapters.some((chapter) => String(chapter.id) === String(current))
+      ) {
+        return current;
       }
-      const blob = await response.blob();
-      objectUrl = window.URL.createObjectURL(blob);
-      const rawName =
-        typeof data?.name === "string" && data.name.trim().length
-          ? data.name.trim()
-          : `user_${id}`;
-      const normalizedName = rawName
-        .replace(/[^A-Za-z0-9_-]+/g, "_")
-        .replace(/_{2,}/g, "_")
-        .replace(/^_+|_+$/g, "");
-      const fileBase = normalizedName || `user_${id}`;
-      const dateStamp = new Date().toISOString().split("T")[0];
+      return chapters[0].id;
+    });
+  }, [chapters]);
 
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = `answers-${fileBase}-${dateStamp}.docx`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (error) {
-      console.error("Failed to export answers", error);
-      setExportError("Не удалось выгрузить ответы. Попробуйте ещё раз.");
-    } finally {
-      if (objectUrl) {
-        window.URL.revokeObjectURL(objectUrl);
-      }
-      setExportingAnswers(false);
+  const selectedChapter = useMemo(() => {
+    if (!selectedChapterId) return null;
+    return (
+      chapters.find((chapter) => String(chapter.id) === String(selectedChapterId)) ||
+      null
+    );
+  }, [chapters, selectedChapterId]);
+
+  const selectedChapterIndex = useMemo(() => {
+    if (!selectedChapterId) return -1;
+    return chapters.findIndex(
+      (chapter) => String(chapter.id) === String(selectedChapterId)
+    );
+  }, [chapters, selectedChapterId]);
+
+  const totalQuestions = useMemo(() => {
+    return chapters.reduce((acc, chapter) => {
+      if (!chapter || !Array.isArray(chapter.questions)) return acc;
+      return acc + chapter.questions.length;
+    }, 0);
+  }, [chapters]);
+
+  const formatChapterTitle = useCallback((chapter, index) => {
+    const rawTitle = typeof chapter?.title === "string" ? chapter.title.trim() : "";
+    if (rawTitle.length) {
+      return rawTitle;
     }
-  }, [data?.name, exportingAnswers, id]);
-
-  const pushQuestions = async () => {
-    const body = {
-      mode,
-      questions: qSingle.trim() ? [qSingle.trim()] : [],
-      bulk: qBulk,
-    };
-    await apiPost(`/api/admin/users/${id}/questions`, body);
-    setQSingle("");
-    setQBulk("");
-    await reload();
+    return `Глава ${index + 1}`;
+  }, []);
+  const openQuestionsModal = () => {
+    setManualSingle("");
+    setManualBulk("");
+    setManualError(null);
+    setManualBusy(false);
+    setChapterCreateTitle("");
+    setChapterCreateError(null);
+    setQuestionTab("manual");
+    setMode("append");
+    setTemplateStep("pick");
+    setTemplateActionBusy(false);
+    setTemplateActionError(null);
+    setSelectedTemplate(null);
+    setSelectedTemplateQuestions([]);
+    setEditableTemplateQuestions([]);
+    setQuestionsModalOpen(true);
   };
 
-  const removeQuestionAt = async (idx) => {
-    const next = questions.filter((_, i) => i !== idx);
-    await apiPost(`/api/admin/users/${id}/questions`, {
-      mode: "replace",
-      questions: next,
-    });
-    await reload();
+  const closeQuestionsModal = () => {
+    setQuestionsModalOpen(false);
+  };
+
+  const handleTabChange = (nextTab) => {
+    setQuestionTab(nextTab);
+    if (nextTab === "template") {
+      setTemplateStep("pick");
+      setTemplateActionError(null);
+      setTemplateActionBusy(false);
+      setSelectedTemplate(null);
+      setSelectedTemplateQuestions([]);
+      setEditableTemplateQuestions([]);
+      loadTemplatesList();
+    }
   };
 
   const loadTemplatesList = useCallback(async () => {
@@ -150,37 +187,73 @@ export default function UserDetail() {
         throw new Error("Не удалось загрузить список шаблонов.");
       }
       const payload = await response.json();
-      setTemplatesList(
-        Array.isArray(payload.templates) ? payload.templates : []
-      );
+      setTemplatesList(Array.isArray(payload.templates) ? payload.templates : []);
     } catch (error) {
       console.error(error);
       setTemplatesError(
-        error.message || "Не удалось загрузить список шаблонов."
+        error.message || "Не удалось загрузить список шаблонов. Попробуйте ещё раз."
       );
     } finally {
       setTemplatesLoading(false);
     }
   }, []);
+  const handleManualSubmit = async (event) => {
+    event.preventDefault();
+    if (!selectedChapterId) {
+      setManualError("Выберите главу, чтобы добавить вопросы.");
+      return;
+    }
+    const single = manualSingle.trim();
+    const bulk = manualBulk;
+    if (!single && !bulk.trim() && mode === "append") {
+      setManualError("Добавьте хотя бы один вопрос или переключитесь на замену.");
+      return;
+    }
 
-  const openTemplateModal = () => {
-    setTemplateModalOpen(true);
-    setTemplateStep("pick");
-    setTemplateActionError(null);
-    setTemplateActionBusy(false);
-    setSelectedTemplate(null);
-    setSelectedTemplateQuestions([]);
-    setEditableTemplateQuestions([]);
-    loadTemplatesList();
+    setManualBusy(true);
+    setManualError(null);
+    try {
+      await apiPost(`/api/admin/users/${id}/questions`, {
+        mode,
+        chapterId: selectedChapterId,
+        questions: single ? [single] : [],
+        bulk,
+      });
+      setManualSingle("");
+      setManualBulk("");
+      await reload();
+    } catch (error) {
+      console.error(error);
+      setManualError(
+        error.message || "Не удалось сохранить вопросы. Попробуйте ещё раз."
+      );
+    } finally {
+      setManualBusy(false);
+    }
   };
 
-  const closeTemplateModal = () => {
-    setTemplateModalOpen(false);
-    setTemplateActionBusy(false);
-    setTemplateActionError(null);
-    setSelectedTemplate(null);
-    setSelectedTemplateQuestions([]);
-    setEditableTemplateQuestions([]);
+  const handleCreateChapter = async (event) => {
+    event.preventDefault();
+    if (chapterCreateBusy) return;
+    setChapterCreateBusy(true);
+    setChapterCreateError(null);
+    try {
+      const payload = await apiPost(`/api/admin/users/${id}/chapters`, {
+        title: chapterCreateTitle.trim() || null,
+      });
+      setChapterCreateTitle("");
+      if (payload?.id) {
+        setSelectedChapterId(payload.id);
+      }
+      await reload();
+    } catch (error) {
+      console.error(error);
+      setChapterCreateError(
+        error.message || "Не удалось создать главу. Попробуйте ещё раз."
+      );
+    } finally {
+      setChapterCreateBusy(false);
+    }
   };
 
   const handleTemplatePick = async (template) => {
@@ -195,9 +268,7 @@ export default function UserDetail() {
         throw new Error("Не удалось открыть шаблон.");
       }
       const detail = await response.json();
-      const questionsFromTemplate = sanitizeTemplateQuestions(
-        detail.questions
-      );
+      const questionsFromTemplate = sanitizeQuestions(detail.questions);
       setSelectedTemplate({
         id: detail.id,
         title: detail.title,
@@ -207,7 +278,7 @@ export default function UserDetail() {
       setEditableTemplateQuestions(questionsFromTemplate);
       setTemplateStep("preview");
       if (!questionsFromTemplate.length) {
-        setTemplateActionError("В шаблоне пока нет вопросов.");
+        setTemplateActionError("В шаблоне нет вопросов.");
       }
     } catch (error) {
       console.error(error);
@@ -216,7 +287,6 @@ export default function UserDetail() {
       setTemplateActionBusy(false);
     }
   };
-
   const startEditTemplate = () => {
     setEditableTemplateQuestions([...selectedTemplateQuestions]);
     setTemplateActionError(null);
@@ -224,7 +294,7 @@ export default function UserDetail() {
   };
 
   const backToPreviewFromEdit = () => {
-    const cleaned = sanitizeTemplateQuestions(editableTemplateQuestions);
+    const cleaned = sanitizeQuestions(editableTemplateQuestions);
     setSelectedTemplateQuestions(cleaned);
     setEditableTemplateQuestions(cleaned);
     setTemplateActionError(null);
@@ -240,21 +310,23 @@ export default function UserDetail() {
   };
 
   const removeEditableQuestion = (index) => {
-    setEditableTemplateQuestions((prev) => prev.filter((_, i) => i !== index));
+    setEditableTemplateQuestions((prev) =>
+      prev.filter((_, position) => position !== index)
+    );
   };
 
   const addEditableQuestion = () => {
-    setEditableTemplateQuestions((prev) => {
-      return [...prev, ""];
-    });
+    setEditableTemplateQuestions((prev) => [...prev, ""]);
   };
 
   const applyTemplateQuestions = async (source) => {
-    const prepared = sanitizeTemplateQuestions(source);
-    if (!prepared.length) {
-      setTemplateActionError(
-        "Добавьте хотя бы один вопрос перед отправкой."
-      );
+    if (!selectedChapterId) {
+      setTemplateActionError("Выберите главу, чтобы обновить вопросы.");
+      return;
+    }
+    const prepared = sanitizeQuestions(source);
+    if (mode === "append" && prepared.length === 0) {
+      setTemplateActionError("Добавьте хотя бы один вопрос или переключитесь на замену.");
       return;
     }
     setTemplateActionBusy(true);
@@ -262,17 +334,34 @@ export default function UserDetail() {
     try {
       await apiPost(`/api/admin/users/${id}/questions`, {
         mode,
+        chapterId: selectedChapterId,
         questions: prepared,
       });
       await reload();
-      closeTemplateModal();
+      setTemplateStep("pick");
+      setSelectedTemplate(null);
+      setSelectedTemplateQuestions([]);
+      setEditableTemplateQuestions([]);
     } catch (error) {
       console.error(error);
       setTemplateActionError(
-        error.message || "Не удалось отправить вопросы пользователю."
+        error.message || "Не удалось применить шаблон. Попробуйте ещё раз."
       );
     } finally {
       setTemplateActionBusy(false);
+    }
+  };
+
+  const removeQuestion = async (questionId) => {
+    setQuestionsError(null);
+    try {
+      await apiDelete(`/api/admin/users/${id}/questions/${questionId}`);
+      await reload();
+    } catch (error) {
+      console.error(error);
+      setQuestionsError(
+        error.message || "Не удалось удалить вопрос. Попробуйте ещё раз."
+      );
     }
   };
 
@@ -280,253 +369,386 @@ export default function UserDetail() {
 
   const telegram = data.telegram || null;
   const tgUsername =
-    telegram?.username && telegram.username.length
-      ? `@${telegram.username}`
-      : "-";
+    telegram?.username && telegram.username.length ? `@${telegram.username}` : "-";
   const tgNameRaw = [telegram?.first_name, telegram?.last_name]
     .filter(Boolean)
     .join(" ");
   const tgName = tgNameRaw && tgNameRaw.trim().length ? tgNameRaw.trim() : "-";
   const tgId = telegram?.id ?? "-";
   const tgPhone = telegram?.phone ?? "-";
+
   const modeHint =
     mode === "replace"
-      ? "Режим: заменить существующие вопросы."
-      : "Режим: добавить к существующим вопросам.";
-
-  const templateModal = !templateModalOpen
+      ? "Режим: заменить вопросы главы."
+      : "Режим: добавить вопросы к выбранной главе.";
+  const questionsModal = !questionsModalOpen
     ? null
     : (
         <div className="modal-backdrop">
-          <div className="modal-card w-[min(760px,95vw)] space-y-4">
+          <div className="modal-card w-[min(860px,96vw)] space-y-4">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="font-serif text-[1.6rem]">
-                  {templateStep === "preview"
-                    ? selectedTemplate?.title || "Просмотр шаблона"
-                    : templateStep === "edit"
-                    ? "Редактирование вопросов"
-                    : "Загрузка из шаблонов"}
-                </h3>
-                {templateStep === "preview" && selectedTemplate?.description ? (
-                  <div className="text-muted text-sm">
-                    {selectedTemplate.description}
+              <div className="space-y-1">
+                <h3 className="font-serif text-[1.6rem]">Управление вопросами</h3>
+                <div className="text-sm text-muted">{modeHint}</div>
+                {selectedChapter ? (
+                  <div className="text-sm">
+                    Текущая глава:
+                    <b>
+                      {" "}
+                      {formatChapterTitle(
+                        selectedChapter,
+                        selectedChapterIndex >= 0 ? selectedChapterIndex : 0
+                      )}
+                    </b>
                   </div>
-                ) : null}
-                {templateStep !== "pick" ? (
-                  <div className="text-muted text-xs mt-1">{modeHint}</div>
-                ) : null}
+                ) : (
+                  <div className="text-sm text-[#b2563f]">
+                    Выберите или создайте главу.
+                  </div>
+                )}
               </div>
-              <button className="btn icon-btn" onClick={closeTemplateModal}>
+              <button className="btn icon-btn" onClick={closeQuestionsModal}>
                 X
               </button>
             </div>
 
-            {templateStep === "pick" ? (
-              <div className="space-y-3">
-                {templatesLoading ? (
-                  <div className="text-muted text-sm">
-                    Загрузка доступных шаблонов...
+            <div className="grid gap-4 md:grid-cols-[240px_1fr]">
+              <div className="space-y-4">
+                <div className="border border-line rounded-[12px] bg-white/70 p-3 space-y-3">
+                  <div className="text-xs uppercase tracking-wide text-muted">
+                    Главы
                   </div>
-                ) : templatesError ? (
-                  <div className="text-[#b2563f] text-sm">{templatesError}</div>
-                ) : templatesList.length === 0 ? (
-                  <div className="text-muted text-sm">
-                    Шаблонов пока нет. Создайте их в разделе «Шаблоны».
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
-                    {templatesList.map((tpl) => (
-                      <div
-                        key={tpl.id}
-                        className="border border-line rounded-[12px] bg-white/70 p-3 space-y-2"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="font-semibold">{tpl.title}</div>
-                            {tpl.description ? (
-                              <div className="text-muted text-sm">
-                                {tpl.description}
-                              </div>
-                            ) : null}
-                          </div>
-                          <div className="text-right text-sm text-muted">
-                            <div>Вопросов: {tpl.questionCount ?? 0}</div>
-                          </div>
-                        </div>
-                        {tpl.firstQuestion ? (
-                          <div className="text-sm text-muted whitespace-pre-wrap break-words border border-dashed border-line rounded-[10px] bg-white/80 p-2">
-                            {tpl.firstQuestion}
-                          </div>
-                        ) : null}
-                        <div className="flex justify-end">
-                          <button
-                            className="btn primary"
-                            onClick={() => handleTemplatePick(tpl)}
-                            disabled={templateActionBusy}
-                          >
-                            {templateActionBusy ? "Загрузка..." : "Выбрать"}
-                          </button>
-                        </div>
+                  <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
+                    {chapters.length === 0 ? (
+                      <div className="text-sm text-muted">
+                        Создайте первую главу, чтобы добавить вопросы.
                       </div>
-                    ))}
+                    ) : (
+                      chapters.map((chapter, index) => {
+                        const active =
+                          String(chapter.id) === String(selectedChapterId);
+                        return (
+                          <button
+                            key={chapter.id}
+                            type="button"
+                            className={`w-full text-left btn ${active ? "primary" : ""}`}
+                            onClick={() => setSelectedChapterId(chapter.id)}
+                          >
+                            {formatChapterTitle(chapter, index)}
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
-                )}
 
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    className="btn"
-                    onClick={loadTemplatesList}
-                    disabled={templatesLoading}
-                  >
-                    Обновить
-                  </button>
-                  {templateActionError ? (
-                    <div className="text-[#b2563f] text-sm">
-                      {templateActionError}
-                    </div>
+                  <form className="space-y-2" onSubmit={handleCreateChapter}>
+                    <input
+                      className="input"
+                      placeholder="Название главы"
+                      value={chapterCreateTitle}
+                      onChange={(event) => setChapterCreateTitle(event.target.value)}
+                      disabled={chapterCreateBusy}
+                    />
+                    <button className="btn" type="submit" disabled={chapterCreateBusy}>
+                      {chapterCreateBusy ? "Создаём..." : "Создать главу"}
+                    </button>
+                  </form>
+                  {chapterCreateError ? (
+                    <div className="text-sm text-[#b2563f]">{chapterCreateError}</div>
                   ) : null}
                 </div>
-              </div>
-            ) : templateStep === "preview" ? (
-              <div className="space-y-3">
-                <div className="text-sm text-muted">{modeHint}</div>
-                <div className="border border-line rounded-[12px] bg-white/70 p-3 max-h-[55vh] overflow-y-auto">
-                  {selectedTemplateQuestions.length === 0 ? (
-                    <div className="text-muted text-sm">
-                      В этом шаблоне пока нет вопросов.
-                    </div>
-                  ) : (
-                    <ol className="list-decimal pl-5 space-y-1 text-sm">
-                      {selectedTemplateQuestions.map((question, index) => (
-                        <li
-                          key={`${selectedTemplate?.id || "tpl"}-${index}`}
-                          className="whitespace-pre-wrap break-words"
-                        >
-                          {question}
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </div>
-                {templateActionError ? (
-                  <div className="text-[#b2563f] text-sm">
-                    {templateActionError}
+
+                <div className="border border-line rounded-[12px] bg-white/70 p-3 space-y-2">
+                  <div className="text-xs uppercase tracking-wide text-muted">
+                    Режим
                   </div>
-                ) : null}
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <button
-                    className="btn"
-                    onClick={() => {
-                      setTemplateStep("pick");
-                      setTemplateActionError(null);
-                    }}
-                    disabled={templateActionBusy}
-                  >
-                    Назад
-                  </button>
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      className="btn"
-                      type="button"
-                      onClick={startEditTemplate}
-                      disabled={templateActionBusy}
-                    >
-                      Отредактировать
-                    </button>
-                    <button
-                      className="btn primary"
-                      type="button"
-                      onClick={() =>
-                        applyTemplateQuestions(selectedTemplateQuestions)
-                      }
-                      disabled={templateActionBusy}
-                    >
-                      {templateActionBusy ? "Отправка..." : "Отправить"}
-                    </button>
-                  </div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="chapter-mode"
+                      checked={mode === "append"}
+                      onChange={() => setMode("append")}
+                    />
+                    Добавить к выбранной главе
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="chapter-mode"
+                      checked={mode === "replace"}
+                      onChange={() => setMode("replace")}
+                    />
+                    Заменить вопросы главы
+                  </label>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="text-sm text-muted">
-                    Questions ready to send: {cleanedEditableQuestions.length}
-                  </div>
+
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
                   <button
-                    className="btn"
+                    className={`btn ${questionTab === "manual" ? "primary" : ""}`}
                     type="button"
-                    onClick={addEditableQuestion}
-                    disabled={templateActionBusy}
+                    onClick={() => handleTabChange("manual")}
                   >
-                    Добавить вопрос
+                    Вручную
+                  </button>
+                  <button
+                    className={`btn ${questionTab === "template" ? "primary" : ""}`}
+                    type="button"
+                    onClick={() => handleTabChange("template")}
+                  >
+                    Из шаблона
                   </button>
                 </div>
-                <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-                  {editableTemplateQuestions.length === 0 ? (
-                    <div className="text-muted text-sm">
-                      Список пуст. Добавьте вопросы для отправки.
+                {questionTab === "manual" ? (
+                  <form className="space-y-3" onSubmit={handleManualSubmit}>
+                    <div className="paper p-4">
+                      <div className="font-semibold mb-2">Добавить один вопрос</div>
+                      <input
+                        className="input"
+                        placeholder="Введите текст вопроса"
+                        value={manualSingle}
+                        onChange={(event) => setManualSingle(event.target.value)}
+                        disabled={manualBusy}
+                      />
+                      <div className="text-sm text-muted mt-2">
+                        Короткие подсказки допустимы, HTML не поддерживается.
+                      </div>
                     </div>
-                  ) : (
-                    editableTemplateQuestions.map((question, index) => (
-                      <div
-                        key={`editable-${index}`}
-                        className="border border-line rounded-[12px] bg-white/70 p-3 space-y-2"
+
+                    <div className="paper p-4">
+                      <div className="font-semibold mb-2">
+                        Добавить несколько вопросов (разделитель "$")
+                      </div>
+                      <textarea
+                        className="input min-h-[140px]"
+                        placeholder="Вопрос 1 $ Вопрос 2 $ Вопрос 3"
+                        value={manualBulk}
+                        onChange={(event) => setManualBulk(event.target.value)}
+                        disabled={manualBusy}
+                      />
+                      <div className="text-sm text-muted mt-2">
+                        Используйте символ <b>$</b>, чтобы разделить вопросы.
+                      </div>
+                    </div>
+
+                    {manualError ? (
+                      <div className="text-sm text-[#b2563f]">{manualError}</div>
+                    ) : null}
+
+                    <div className="flex justify-end">
+                      <button
+                        className="btn primary"
+                        type="submit"
+                        disabled={manualBusy || !selectedChapterId}
                       >
-                        <div className="flex items-center justify-between text-sm">
-                          <span>Вопрос {index + 1}</span>
+                        {manualBusy ? "Сохраняем..." : "Сохранить"}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="space-y-3">
+                    {templateStep === "pick" ? (
+                      <div className="space-y-3">
+                        <div className="text-sm text-muted">
+                          Выберите шаблон, чтобы загрузить вопросы в главу.
+                        </div>
+                        {templatesLoading ? (
+                          <div className="text-muted text-sm">Загрузка шаблонов...</div>
+                        ) : templatesError ? (
+                          <div className="text-sm text-[#b2563f]">{templatesError}</div>
+                        ) : (
+                          <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+                            {templatesList.map((template) => (
+                              <div
+                                key={template.id}
+                                className="border border-line rounded-[12px] bg-white/70 p-3 space-y-2"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="font-semibold">{template.title}</div>
+                                    {template.description ? (
+                                      <div className="text-muted text-sm">
+                                        {template.description}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  <div className="text-right text-sm text-muted">
+                                    <div>Вопросов: {template.questionCount ?? 0}</div>
+                                  </div>
+                                </div>
+                                {template.firstQuestion ? (
+                                  <div className="text-sm text-muted whitespace-pre-wrap break-words border border-dashed border-line rounded-[10px] bg-white/80 p-2">
+                                    {template.firstQuestion}
+                                  </div>
+                                ) : null}
+                                <div className="flex justify-end">
+                                  <button
+                                    className="btn primary"
+                                    onClick={() => handleTemplatePick(template)}
+                                    disabled={templateActionBusy}
+                                  >
+                                    {templateActionBusy ? "Загрузка..." : "Выбрать"}
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            className="btn"
+                            onClick={loadTemplatesList}
+                            disabled={templatesLoading}
+                          >
+                            Обновить
+                          </button>
+                          {templateActionError ? (
+                            <div className="text-[#b2563f] text-sm">
+                              {templateActionError}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : templateStep === "preview" ? (
+                      <div className="space-y-3">
+                        <div className="text-sm text-muted">{modeHint}</div>
+                        <div className="border border-line rounded-[12px] bg-white/70 p-3 max-h-[55vh] overflow-y-auto">
+                          {selectedTemplateQuestions.length === 0 ? (
+                            <div className="text-muted text-sm">
+                              В шаблоне нет вопросов.
+                            </div>
+                          ) : (
+                            <ol className="list-decimal pl-5 space-y-1 text-sm">
+                              {selectedTemplateQuestions.map((question, index) => (
+                                <li
+                                  key={`${selectedTemplate?.id || "template"}-${index}`}
+                                  className="whitespace-pre-wrap break-words"
+                                >
+                                  {question}
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                        </div>
+                        {templateActionError ? (
+                          <div className="text-[#b2563f] text-sm">
+                            {templateActionError}
+                          </div>
+                        ) : null}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <button
+                            className="btn"
+                            onClick={() => {
+                              setTemplateStep("pick");
+                              setTemplateActionError(null);
+                            }}
+                            disabled={templateActionBusy}
+                          >
+                            Назад
+                          </button>
+                          <div className="flex gap-2 flex-wrap">
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={startEditTemplate}
+                              disabled={templateActionBusy}
+                            >
+                              Изменить
+                            </button>
+                            <button
+                              className="btn primary"
+                              type="button"
+                              onClick={() => applyTemplateQuestions(selectedTemplateQuestions)}
+                              disabled={templateActionBusy}
+                            >
+                              {templateActionBusy ? "Применяем..." : "Применить"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="text-sm text-muted">
+                            Вопросов: {cleanedEditableQuestions.length}
+                          </div>
                           <button
                             className="btn"
                             type="button"
-                            onClick={() => removeEditableQuestion(index)}
+                            onClick={addEditableQuestion}
                             disabled={templateActionBusy}
                           >
-                            Удалить
+                            Добавить вопрос
                           </button>
                         </div>
-                        <textarea
-                          className="input min-h-[80px]"
-                          value={question}
-                          onChange={(event) =>
-                            updateEditableQuestion(index, event.target.value)
-                          }
-                          disabled={templateActionBusy}
-                        />
+                        <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+                          {editableTemplateQuestions.length === 0 ? (
+                            <div className="text-muted text-sm">
+                              Добавьте вопросы, чтобы отредактировать шаблон.
+                            </div>
+                          ) : (
+                            editableTemplateQuestions.map((question, index) => (
+                              <div
+                                key={`editable-${index}`}
+                                className="border border-line rounded-[12px] bg-white/70 p-3 space-y-2"
+                              >
+                                <div className="flex items-center justify-between text-sm">
+                                  <span>Вопрос {index + 1}</span>
+                                  <button
+                                    className="btn"
+                                    type="button"
+                                    onClick={() => removeEditableQuestion(index)}
+                                    disabled={templateActionBusy}
+                                  >
+                                    Удалить
+                                  </button>
+                                </div>
+                                <textarea
+                                  className="input min-h-[80px]"
+                                  value={question}
+                                  onChange={(event) =>
+                                    updateEditableQuestion(index, event.target.value)
+                                  }
+                                  disabled={templateActionBusy}
+                                />
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        {templateActionError ? (
+                          <div className="text-[#b2563f] text-sm">
+                            {templateActionError}
+                          </div>
+                        ) : null}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={backToPreviewFromEdit}
+                            disabled={templateActionBusy}
+                          >
+                            Назад
+                          </button>
+                          <button
+                            className="btn primary"
+                            type="button"
+                            onClick={() => applyTemplateQuestions(editableTemplateQuestions)}
+                            disabled={templateActionBusy}
+                          >
+                            {templateActionBusy ? "Применяем..." : "Применить"}
+                          </button>
+                        </div>
                       </div>
-                    ))
-                  )}
-                </div>
-                {templateActionError ? (
-                  <div className="text-[#b2563f] text-sm">
-                    {templateActionError}
+                    )}
                   </div>
-                ) : null}
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={backToPreviewFromEdit}
-                    disabled={templateActionBusy}
-                  >
-                    Назад
-                  </button>
-                  <button
-                    className="btn primary"
-                    type="button"
-                    onClick={() =>
-                      applyTemplateQuestions(editableTemplateQuestions)
-                    }
-                    disabled={templateActionBusy}
-                  >
-                    {templateActionBusy ? "Отправка..." : "Отправить"}
-                  </button>
-                </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       );
-
   return (
     <div className="grid gap-4 md:grid-cols-[320px_1fr]">
       <aside className="paper p-4 space-y-4">
@@ -538,7 +760,7 @@ export default function UserDetail() {
         <div>
           <div className="font-semibold mb-2">Обложка</div>
           <div className="cover bg-gradient-to-br from-blush to-lav w-[120px]">
-            <div className="meta">{data.cover || "Не выбрана"}</div>
+            <div className="meta">{data.cover || "Нет обложки"}</div>
           </div>
         </div>
 
@@ -549,32 +771,24 @@ export default function UserDetail() {
           {telegram ? (
             <dl className="space-y-3 text-sm">
               <div>
-                <dt className="text-muted text-xs uppercase tracking-wide">
-                  Никнейм
-                </dt>
+                <dt className="text-muted text-xs uppercase tracking-wide">Ник</dt>
                 <dd>{tgUsername}</dd>
               </div>
               <div>
-                <dt className="text-muted text-xs uppercase tracking-wide">
-                  Имя
-                </dt>
+                <dt className="text-muted text-xs uppercase tracking-wide">Имя</dt>
                 <dd>{tgName}</dd>
               </div>
               <div>
-                <dt className="text-muted text-xs uppercase tracking-wide">
-                  ID
-                </dt>
+                <dt className="text-muted text-xs uppercase tracking-wide">ID</dt>
                 <dd>{tgId}</dd>
               </div>
               <div>
-                <dt className="text-muted text-xs uppercase tracking-wide">
-                  Телефон
-                </dt>
+                <dt className="text-muted text-xs uppercase tracking-wide">Телефон</dt>
                 <dd>{tgPhone}</dd>
               </div>
             </dl>
           ) : (
-            <div className="text-muted text-sm">Данные Telegram отсутствуют.</div>
+            <div className="text-muted text-sm">Telegram не подключен.</div>
           )}
         </div>
 
@@ -583,9 +797,9 @@ export default function UserDetail() {
             <input
               type="checkbox"
               checked={ordered}
-              onChange={(e) => setOrdered(e.target.checked)}
+              onChange={(event) => setOrdered(event.target.checked)}
             />
-            Заказ подтверждён
+            Заказ оформлен
           </label>
           <button className="btn mt-2" onClick={saveOrder}>
             Сохранить статус заказа
@@ -597,11 +811,11 @@ export default function UserDetail() {
           <select
             className="input"
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(event) => setStatus(event.target.value)}
           >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
@@ -612,118 +826,72 @@ export default function UserDetail() {
       </aside>
 
       <main className="space-y-4">
-        <section className="paper p-4">
+        <section className="paper p-4 space-y-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="font-serif text-xl">Вопросы анкеты</h3>
-            <div className="text-muted">
-              Вопросов сейчас: <b>{questions.length}</b>
-            </div>
+            <h3 className="font-serif text-xl">Вопросы пользователя</h3>
+            <div className="text-muted">Всего: {totalQuestions}</div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 mt-3">
-            <div className="paper p-4">
-              <div className="font-semibold mb-2">Добавить один вопрос</div>
-              <input
-                className="input"
-                placeholder="Введите вопрос и нажмите сохранить"
-                value={qSingle}
-                onChange={(e) => setQSingle(e.target.value)}
-              />
-              <div className="text-sm text-muted mt-2">
-                Текст сохраняется без форматирования. HTML не обрабатывается.
-              </div>
-            </div>
-
-            <div className="paper p-4">
-              <div className="font-semibold mb-2">
-                Добавить сразу несколько (разделитель $)
-              </div>
-              <textarea
-                className="input min-h-[120px]"
-                placeholder="Вопрос 1 $ Вопрос 2 $ Вопрос 3"
-                value={qBulk}
-                onChange={(e) => setQBulk(e.target.value)}
-              />
-              <div className="text-sm text-muted mt-2">
-                Use the <b>$</b> symbol to separate questions.
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center gap-3 flex-wrap">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="mode"
-                checked={mode === "append"}
-                onChange={() => setMode("append")}
-              />
-              Добавить к текущему списку
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="mode"
-                checked={mode === "replace"}
-                onChange={() => setMode("replace")}
-              />
-              Заменить текущий список
-            </label>
-
-            <button className="btn primary" onClick={pushQuestions}>
-              Сохранить вопросы
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <button className="btn primary" onClick={openQuestionsModal}>
+              Управление вопросами
             </button>
           </div>
 
-            <button className="btn" type="button" onClick={openTemplateModal}>
-              Загрузить из шаблонов
-            </button>
-          <div className="mt-4 grid gap-3">
-            {questions.length === 0 ? (
-              <div className="status">
-                <span className="text-lg">Пока нет вопросов</span>
-                <div className="text-muted">
-                  Добавьте вопросы выше, чтобы сформировать интервью.
-                </div>
-              </div>
-            ) : (
-              questions.map((q, i) => (
-                <div
-                  key={i}
-                  className="p-3 border border-line rounded-[14px] bg-paper flex items-start gap-3"
-                >
-                  <div className="w-6 h-6 grid place-items-center rounded-full bg-gradient-to-b from-gold to-blush text-[#5b5246] shrink-0">
-                    {i + 1}
+          {questionsError ? (
+            <div className="text-sm text-[#b2563f]">{questionsError}</div>
+          ) : null}
+
+          <div className="space-y-4 mt-2">
+            {chapters.map((chapter, index) => (
+              <div key={chapter.id} className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-serif text-lg">
+                    {formatChapterTitle(chapter, index)}
                   </div>
-                  <div className="flex-1 whitespace-pre-wrap break-words">{q}</div>
-                  <button
-                    className="btn"
-                    onClick={() => removeQuestionAt(i)}
-                    title="Удалить вопрос"
-                  >
-                    Удалить
-                  </button>
+                  <div className="text-muted text-sm">
+                    Вопросов: {Array.isArray(chapter.questions) ? chapter.questions.length : 0}
+                  </div>
                 </div>
-              ))
-            )}
+
+                {(!chapter.questions || chapter.questions.length === 0) ? (
+                  <div className="status">
+                    <span className="text-lg">В этой главе пока нет вопросов</span>
+                    <div className="text-muted">
+                      Добавьте вопросы через кнопку «Управление вопросами».
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {chapter.questions.map((question, questionIndex) => (
+                      <div
+                        key={question.id}
+                        className="p-3 border border-line rounded-[14px] bg-paper flex items-start gap-3"
+                      >
+                        <div className="w-6 h-6 grid place-items-center rounded-full bg-gradient-to-b from-gold to-blush text-[#5b5246] shrink-0">
+                          {questionIndex + 1}
+                        </div>
+                        <div className="flex-1 whitespace-pre-wrap break-words">
+                          {question.text}
+                        </div>
+                        <button
+                          className="btn"
+                          onClick={() => removeQuestion(question.id)}
+                          title="Удалить вопрос"
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </section>
 
-        <section className="paper p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="font-serif text-xl">Ответы пользователя</h3>
-            <button
-              type="button"
-              className="btn text-sm px-4 py-2"
-              onClick={handleExportAnswers}
-              disabled={exportingAnswers}
-            >
-              {exportingAnswers ? "Экспорт..." : "Экспорт в Word"}
-            </button>
-          </div>
-          {exportError ? (
-            <div className="text-sm text-[#b2563f]">{exportError}</div>
-          ) : null}
+        <section className="paper p-4">
+          <h3 className="font-serif text-xl mb-2">Ответы пользователя</h3>
           <div className="space-y-3">
             {data.answers?.length ? (
               data.answers.map((answer, index) => (
@@ -734,24 +902,21 @@ export default function UserDetail() {
                   <div className="text-muted text-sm mb-1">
                     Вопрос {answer.questionIndex + 1}
                   </div>
-                  <ExpandableText text={answer.text} />
+                  <div className="whitespace-pre-wrap break-words">
+                    {answer.text || "-"}
+                  </div>
                 </div>
               ))
             ) : (
-              <div className="text-muted">Ответов пока нет.</div>
+              <div className="text-muted">Ответы пока не сохранены.</div>
             )}
           </div>
         </section>
       </main>
-      {templateModal}
+
+      {questionsModal}
     </div>
   );
 }
 
-
-
-
-
-
-
-
+  
