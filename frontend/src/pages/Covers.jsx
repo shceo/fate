@@ -7,9 +7,12 @@ import { apiPost } from "../shared/api.js";
 
 const coverOptions = [
   {
-    title: "Северное сияние",
-    subtitle: "Уютный градиент с мягкими линиями и акцентом на цвет",
+    title: "Индивидуальный дизайн",
+    subtitle: "Создадим обложку специально под вашу историю",
     gradient: "from-lav to-sky",
+    isCustom: true,
+    backMessage:
+      "✨ Индивидуальный дизайн активирован. Это платная услуга. Наш админ скоро напишет вам в ЛС, чтобы утвердить детали и стоимость",
   },
   {
     title: "Пастельная классика",
@@ -54,6 +57,7 @@ export default function Covers() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [customFlip, setCustomFlip] = useState(false);
 
   const selectedLabel = useMemo(() => {
     if (!selection) return null;
@@ -62,12 +66,21 @@ export default function Covers() {
 
   const handlePick = async (option) => {
     if (busy) return;
+    const isCustom = Boolean(option.isCustom);
+    if (isCustom) {
+      setCustomFlip(true);
+    } else {
+      setCustomFlip(false);
+    }
     setBusy(true);
     setError("");
     try {
       const label = `${option.title} — ${option.subtitle}`;
       await apiPost("/api/cover", { name: label });
       setSelection(option);
+      if (isCustom) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
       setDialogOpen(true);
     } catch (err) {
       console.error("Failed to save cover template", err);
@@ -79,10 +92,12 @@ export default function Covers() {
 
   const closeDialog = () => {
     if (busy) return;
+    setCustomFlip(false);
     setDialogOpen(false);
   };
 
   const goBack = () => {
+    setCustomFlip(false);
     setDialogOpen(false);
     if (typeof window !== "undefined" && window.history.length > 1) {
       navigate(-1);
@@ -92,7 +107,7 @@ export default function Covers() {
   };
 
   return (
-    <div>
+    <div className="cover-page">
       <Header />
 
       <ConfirmDialog
@@ -134,23 +149,49 @@ export default function Covers() {
           {coverOptions.map((option) => {
             const label = `${option.title} — ${option.subtitle}`;
             const isSelected = selection?.title === option.title;
+            const isCustom = Boolean(option.isCustom);
+            const isFlipped = isCustom && customFlip;
             return (
               <label
                 key={option.title}
-                className={`cover bg-gradient-to-br ${option.gradient} transition-transform duration-200 ${
-                  busy ? "opacity-75 pointer-events-none" : ""
-                } ${isSelected ? "ring-4 ring-[#d0b8a8]/80 ring-offset-2" : ""}`}
+                className={`cover cover-card transition-transform duration-200 ${
+                  busy ? "pointer-events-none" : ""
+                } ${isSelected ? "ring-4 ring-[#d0b8a8]/80 ring-offset-2" : ""} ${
+                  isCustom ? "cover-card--custom" : ""
+                } ${isFlipped ? "cover-card--flipped" : ""}`}
               >
                 <input
                   type="radio"
                   name="cover"
-                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  className="cover-input absolute inset-0 opacity-0 cursor-pointer"
                   onChange={() => handlePick(option)}
                   disabled={busy}
                   aria-label={`Выбрать обложку ${label}`}
                 />
-                <span className="tag">{option.title}</span>
-                <div className="meta font-serif">{option.subtitle}</div>
+                <div className="cover-outer">
+                  <div
+                    className={`cover-face cover-front bg-gradient-to-br ${option.gradient}`}
+                  >
+                    <span className="tag">{option.title}</span>
+                    <div className="meta font-serif">{option.subtitle}</div>
+                  </div>
+                  <div
+                    className={`cover-face cover-back bg-gradient-to-br ${option.gradient} ${
+                      isCustom ? "cover-face--center" : ""
+                    }`}
+                  >
+                    {!isCustom && <span className="tag">{option.title}</span>}
+                    <div className={`meta font-serif ${isCustom ? "meta--center" : ""}`}>
+                      {isCustom ? (
+                        <span className="cover-copy">{option.backMessage}</span>
+                      ) : (
+                        option.subtitle
+                      )}
+                    </div>
+                  </div>
+                  <span className="cover-spine" aria-hidden="true" />
+                  <span className="cover-edge" aria-hidden="true" />
+                </div>
               </label>
             );
           })}
