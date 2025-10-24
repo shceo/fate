@@ -1,6 +1,7 @@
-import React from "react";
+﻿import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../../shared/AuthContext.jsx";
+import Logo from "../../components/Logo.jsx";
 
 function NavItem({ to, end, icon, children }) {
   return (
@@ -33,7 +34,10 @@ export default function AdminLayout() {
     <div className="min-h-screen bg-[radial-gradient(90rem_60rem_at_-10%_-10%,#F1E6D6_0%,transparent_60%),_radial-gradient(80rem_60rem_at_110%_10%,#F7EDE4_0%,transparent_55%),_#F5EFE6]">
       <div className="container mx-auto px-4 py-6 grid gap-6 md:grid-cols-[260px_1fr]">
         <aside className="paper p-4 h-min sticky top-6">
-          <div className="font-serif text-[1.5rem] mb-3">Fate - Админка</div>
+          <div className="flex flex-col gap-2 mb-3">
+            <Logo className="h-10 max-w-[50px]" />
+            <div className="font-serif text-[1.2rem]">Админка</div>
+          </div>  
           <nav className="space-y-2">
             <NavItem to="/admin" end icon="[K]">
               Клиенты

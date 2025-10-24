@@ -3,6 +3,7 @@ import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
 import TelegramAuthSection from "../components/TelegramAuthSection.jsx";
 import PasswordInput from "../components/PasswordInput.jsx";
+import Logo from "../components/Logo.jsx";
 import { useAuth } from "../shared/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 
@@ -31,9 +32,7 @@ export default function Register() {
         <div className="card-glass w-[min(480px,92vw)] p-8 space-y-6">
           <div className="grid place-items-center">
             <div className="font-serif text-[1.6rem]">
-              <span className="inline-block px-3 py-1 rounded-full bg-gradient-to-br from-gold to-blush shadow-tiny">
-                Fate
-              </span>
+              <Logo className="h-16 max-w-[240px]" />
             </div>
           </div>
           <h1 className="font-serif text-[clamp(1.6rem,3vw,2.2rem)]">

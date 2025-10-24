@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../shared/AuthContext.jsx";
 import ConfirmDialog from "./ConfirmDialog.jsx";
+import Logo from "./Logo.jsx";
 
 export default function Header() {
   const { user, logout } = useAuth();
@@ -19,10 +20,8 @@ export default function Header() {
     <header className="sticky top-0 z-40 backdrop-blur-md bg-[rgba(250,247,242,.75)] border-b border-line">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between py-3">
-          <Link to={homeLink} className="font-serif font-semibold text-[1.4rem]">
-            <span className="inline-block px-2 py-1 rounded-full bg-gradient-to-br from-gold to-blush shadow-tiny">
-              Fate
-            </span>
+          <Link to={homeLink} className="inline-flex items-center">
+            <Logo className="h-10 max-w-[50px]" loading="eager" />
           </Link>
           <nav className="flex items-center gap-2">
             {!user ? (

@@ -1,4 +1,5 @@
 import React from "react";
+import Logo from "./Logo.jsx";
 
 export default function Footer() {
   return (
@@ -6,9 +7,7 @@ export default function Footer() {
       <div className="container mx-auto px-4 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <div className="font-serif text-[1.1rem]">
-            <span className="inline-block px-2 py-1 rounded-full bg-gradient-to-br from-gold to-blush shadow-tiny">
-              Fate
-            </span>
+            <Logo className="h-12 max-w-[200px]" />
           </div>
           <div className="mt-1">© 2025 Fate. Все права защищены.</div>
         </div>
@@ -16,7 +15,7 @@ export default function Footer() {
           <div>
             Напишите нам:{" "}
             <a className="underline" href="mailto:hello@fate.books">
-              hello@fate.books
+              hello@my-fate.ru
             </a>
           </div>
           <div className="mt-1">Москва · Санкт-Петербург</div>
