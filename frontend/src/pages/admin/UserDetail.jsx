@@ -2,6 +2,7 @@
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useParams } from "react-router-dom";
@@ -51,6 +52,8 @@ export default function UserDetail() {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("");
   const [ordered, setOrdered] = useState(false);
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
+  const statusPickerRef = useRef(null);
 
   const [mode, setMode] = useState("append");
   const [questionsModalOpen, setQuestionsModalOpen] = useState(false);
@@ -118,6 +121,48 @@ export default function UserDetail() {
     () => (Array.isArray(data?.chapters) ? data.chapters : []),
     [data]
   );
+
+  const activeStatusOption = useMemo(() => {
+    return (
+      STATUS_OPTIONS.find((option) => option.value === status) || STATUS_OPTIONS[0]
+    );
+  }, [status]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        statusPickerRef.current &&
+        !statusPickerRef.current.contains(event.target)
+      ) {
+        setStatusPickerOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setStatusPickerOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  const toggleStatusPicker = useCallback(() => {
+    setStatusPickerOpen((current) => !current);
+  }, []);
+
+  const handleStatusSelect = useCallback((value) => {
+    setStatus(value);
+    setStatusPickerOpen(false);
+  }, []);
+
+  useEffect(() => {
+    setStatusPickerOpen(false);
+  }, [status]);
 
   useEffect(() => {
     if (!chapters.length) {
@@ -918,17 +963,44 @@ export default function UserDetail() {
 
         <div>
           <div className="font-semibold mb-2">Статус проекта</div>
-          <select
-            className="input"
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
+          <div
+            className={`status-select${statusPickerOpen ? " status-select--open" : ""}`}
+            ref={statusPickerRef}
           >
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            <button
+              type="button"
+              className="status-select__field"
+              onClick={toggleStatusPicker}
+              aria-haspopup="listbox"
+              aria-expanded={statusPickerOpen ? "true" : "false"}
+            >
+              <span className="status-select__label">{activeStatusOption.label}</span>
+            </button>
+            <ul
+              className="status-select__list"
+              role="listbox"
+            >
+              {STATUS_OPTIONS.map((option) => {
+                const optionKey = option.value || "none";
+                const selected = option.value === status;
+                return (
+                  <li key={optionKey}>
+                    <button
+                      type="button"
+                      className={`status-select__option${
+                        selected ? " status-select__option--active" : ""
+                      }`}
+                      onClick={() => handleStatusSelect(option.value)}
+                      role="option"
+                      aria-selected={selected ? "true" : "false"}
+                    >
+                      {option.label}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
           <button className="btn mt-2" onClick={saveStatus}>
             Сохранить статус
           </button>
