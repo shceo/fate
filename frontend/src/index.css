@@ -419,6 +419,12 @@
     border:1px solid var(--line);
     background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.75));
     min-height:3rem;
+    word-break:break-word;
+    overflow-wrap:anywhere;
+  }
+  .answer-card__questionText{
+    word-break:break-word;
+    overflow-wrap:anywhere;
   }
   .answer-card__fade{
     position:absolute;
@@ -461,7 +467,7 @@
     }
     .admin-shell{
       display:block;
-      padding-top:calc(120px + env(safe-area-inset-top,0px));
+      padding-top:calc(92px + env(safe-area-inset-top,0px));
       padding-bottom:2rem;
     }
     .admin-nav{
@@ -473,10 +479,10 @@
       border-radius:0;
       border-bottom-left-radius:var(--radius-lg);
       border-bottom-right-radius:var(--radius-lg);
-      display:flex;
-      flex-direction:column;
-      gap:.75rem;
-      padding:calc(env(safe-area-inset-top,0px) + .85rem) 1rem 1rem;
+      display:grid;
+      grid-template-columns:minmax(0,1fr);
+      gap:.5rem;
+      padding:calc(env(safe-area-inset-top,0px) + .65rem) 1rem .85rem;
       box-shadow:0 18px 32px rgba(110,92,74,.18);
       backdrop-filter:saturate(160%) blur(12px);
     }
@@ -491,19 +497,20 @@
     }
     .admin-nav__list{
       display:flex;
-      align-items:center;
-      gap:.6rem;
-      overflow-x:auto;
-      padding-bottom:.35rem;
-      margin:0 -.35rem;
-      scrollbar-width:none;
+      align-items:stretch;
+      justify-content:space-between;
+      flex-wrap:wrap;
+      gap:.45rem;
+      overflow:visible;
+      padding-bottom:0;
+      margin:0;
     }
-    .admin-nav__list::-webkit-scrollbar{ display:none; }
     .admin-nav__item{
-      flex:1 0 auto;
-      min-width:110px;
+      flex:1 1 calc(33.33% - .3rem);
+      min-width:0;
       justify-content:center;
-      white-space:nowrap;
+      white-space:normal;
+      text-align:center;
     }
     .admin-nav__item span:last-child{
       font-size:.9rem;
@@ -512,8 +519,8 @@
       display:none;
     }
     .admin-nav__logout{
-      width:auto;
-      align-self:flex-end;
+      width:100%;
+      justify-self:end;
       padding-inline:1rem;
     }
     .admin-content{
