@@ -111,6 +111,9 @@ function formatQuestionError(error, fallbackMessage) {
   return fallbackMessage;
 }
 
+const INITIAL_ANSWER_PREVIEW = 200;
+const ANSWER_EXPAND_STEP = 500;
+
 export default function UserDetail() {
   const { id } = useParams();
   const [data, setData] = useState(null);
@@ -149,6 +152,8 @@ export default function UserDetail() {
   const [editableTemplateQuestions, setEditableTemplateQuestions] = useState([]);
   const [templateActionBusy, setTemplateActionBusy] = useState(false);
   const [templateActionError, setTemplateActionError] = useState(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState(null);
 
   useBodyScrollLock(questionsModalOpen);
 
@@ -383,6 +388,19 @@ export default function UserDetail() {
     };
   }, [answersSubmittedAt]);
 
+  const answerLookup = useMemo(() => {
+    const map = new Map();
+    if (!Array.isArray(data?.answers)) {
+      return map;
+    }
+    data.answers.forEach((entry) => {
+      const idx = Number(entry?.questionIndex);
+      if (!Number.isFinite(idx)) return;
+      map.set(idx, entry);
+    });
+    return map;
+  }, [data?.answers]);
+
   const formatChapterTitle = useCallback((chapter, index) => {
     const rawTitle = typeof chapter?.title === "string" ? chapter.title.trim() : "";
     if (rawTitle.length) {
@@ -390,6 +408,78 @@ export default function UserDetail() {
     }
     return `Глава ${index + 1}`;
   }, []);
+
+  const answeredChapterGroups = useMemo(() => {
+    const usedIndices = new Set();
+
+    const groups = chapters
+      .map((chapter, index) => {
+        const questions = Array.isArray(chapter?.questions) ? chapter.questions : [];
+        const answers = questions
+          .map((question, questionIdx) => {
+            const questionIndex = Number(question?.index);
+            if (!Number.isFinite(questionIndex)) return null;
+            const answerEntry = answerLookup.get(questionIndex);
+            const text =
+              typeof answerEntry?.text === "string" ? answerEntry.text.trim() : "";
+            if (!text) return null;
+            usedIndices.add(questionIndex);
+            return {
+              chapterId: chapter?.id ?? `chapter-${index}`,
+              chapterNumber: index + 1,
+              chapterTitle: formatChapterTitle(chapter, index),
+              questionIndex,
+              questionNumber: questionIdx + 1,
+              questionText: typeof question?.text === "string" ? question.text : "",
+              answerText: text,
+            };
+          })
+          .filter(Boolean);
+
+        return {
+          chapter,
+          index,
+          title: formatChapterTitle(chapter, index),
+          answers,
+        };
+      })
+      .filter((group) => group.answers.length > 0);
+
+    if (answerLookup.size > usedIndices.size) {
+      const orphans = [];
+      answerLookup.forEach((entry, questionIndex) => {
+        if (usedIndices.has(questionIndex)) return;
+        const text = typeof entry?.text === "string" ? entry.text.trim() : "";
+        if (!text) return;
+        orphans.push({
+          chapterId: null,
+          chapterNumber: null,
+          chapterTitle: "Без главы",
+          questionIndex,
+          questionNumber: questionIndex + 1,
+          questionText: "",
+          answerText: text,
+        });
+      });
+      if (orphans.length > 0) {
+        groups.push({
+          chapter: null,
+          index: Number.MAX_SAFE_INTEGER,
+          title: "Без главы",
+          answers: orphans,
+        });
+      }
+    }
+
+    return groups;
+  }, [chapters, answerLookup, formatChapterTitle]);
+
+  const totalAnsweredCount = useMemo(() => {
+    return answeredChapterGroups.reduce(
+      (acc, group) => acc + group.answers.length,
+      0
+    );
+  }, [answeredChapterGroups]);
   const openQuestionsModal = () => {
     setManualSingle("");
     setManualBulk("");
@@ -631,6 +721,61 @@ export default function UserDetail() {
       );
     }
   };
+
+  const exportFileName = useMemo(() => {
+    const base =
+      (typeof data?.name === "string" && data.name.trim()) ||
+      (typeof data?.email === "string" && data.email.trim()) ||
+      `user-${id}`;
+    const sanitized = base.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80);
+    return `answers-${sanitized || id}.docx`;
+  }, [data?.name, data?.email, id]);
+
+  const handleExport = useCallback(async () => {
+    if (exportBusy) return;
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      const response = await fetch(`/api/admin/users/${id}/export/answers`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        let details = null;
+        try {
+          details = await response.json();
+        } catch (_) {
+          // ignore
+        }
+        const error = new Error(
+          typeof details?.error === "string" && details.error.length
+            ? details.error
+            : "Не удалось экспортировать файл. Попробуйте ещё раз."
+        );
+        error.code = details?.error;
+        throw error;
+      }
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = exportFileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+      showQuestionsNotice("Файл с ответами выгружен.", "success");
+    } catch (error) {
+      console.error("Failed to export answers", error);
+      const message = formatQuestionError(
+        error,
+        "Не удалось экспортировать файл. Попробуйте ещё раз."
+      );
+      setExportError(message);
+      showQuestionsNotice(message, "error");
+    } finally {
+      setExportBusy(false);
+    }
+  }, [exportBusy, id, exportFileName, showQuestionsNotice]);
 
   if (!data) return null;
 
@@ -1262,33 +1407,140 @@ export default function UserDetail() {
           </div>
         </section>
 
-        <section className="paper p-4">
-          <h3 className="font-serif text-xl mb-2">Ответы пользователя</h3>
-          <div className="space-y-3">
-            {data.answers?.length ? (
-              data.answers.map((answer, index) => (
+        <section className="paper p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-serif text-xl mb-0">Ответы пользователя</h3>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-muted text-sm">Ответов: {totalAnsweredCount}</div>
+              <button
+                className="btn"
+                type="button"
+                onClick={handleExport}
+                disabled={exportBusy}
+              >
+                {exportBusy ? "Готовим файл…" : "Экспорт в Word"}
+              </button>
+            </div>
+          </div>
+
+          {exportError ? (
+            <div className="text-sm text-[#b2563f]">{exportError}</div>
+          ) : null}
+
+          {answeredChapterGroups.length === 0 ? (
+            <div className="text-muted">Ответы пока не сохранены.</div>
+          ) : (
+            <div className="space-y-4">
+              {answeredChapterGroups.map((group) => (
                 <div
-                  key={index}
-                  className="p-3 border border-line rounded-[14px] bg-paper"
+                  key={group.chapter?.id ?? `chapter-${group.index}`}
+                  className="space-y-3"
                 >
-                  <div className="text-muted text-sm mb-1">
-                    Вопрос {answer.questionIndex + 1}
-                  </div>
-                  <div className="whitespace-pre-wrap break-words">
-                    {answer.text || "-"}
+                  <div className="font-serif text-lg">{group.title}</div>
+                  <div className="grid gap-3">
+                    {group.answers.map((answer) => (
+                      <AnswerCard key={answer.questionIndex} answer={answer} />
+                    ))}
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="text-muted">Ответы пока не сохранены.</div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
       </main>
 
       {questionsModal}
     </div>
     </>
+  );
+}
+
+
+function AnswerCard({ answer }) {
+  if (!answer) return null;
+  const {
+    chapterNumber,
+    questionNumber,
+    questionIndex,
+    questionText,
+    answerText,
+  } = answer;
+
+  const questionLabel =
+    chapterNumber != null
+      ? `Вопрос ${chapterNumber}.${questionNumber}`
+      : `Вопрос ${questionNumber}`;
+
+  return (
+    <div className="answer-card p-3 border border-line rounded-[14px] bg-paper space-y-2">
+      <div className="answer-card__question text-muted text-sm">
+        {questionLabel} · #{questionIndex + 1}
+      </div>
+      {questionText ? (
+        <div className="answer-card__questionText text-sm font-medium whitespace-pre-wrap break-words">
+          {questionText}
+        </div>
+      ) : null}
+      <AnswerText text={answerText} />
+    </div>
+  );
+}
+
+function AnswerText({ text }) {
+  const cleaned = typeof text === "string" ? text : "";
+  const length = cleaned.length;
+  const [visibleCount, setVisibleCount] = useState(() =>
+    Math.min(length, INITIAL_ANSWER_PREVIEW)
+  );
+
+  useEffect(() => {
+    setVisibleCount(Math.min(cleaned.length, INITIAL_ANSWER_PREVIEW));
+  }, [cleaned]);
+
+  if (!cleaned.length) {
+    return (
+      <div className="answer-card__text text-muted text-sm">Ответ отсутствует.</div>
+    );
+  }
+
+  const displayText = cleaned.slice(0, visibleCount);
+  const hasMore = length > visibleCount;
+  const canCollapse =
+    length > INITIAL_ANSWER_PREVIEW && visibleCount > INITIAL_ANSWER_PREVIEW;
+
+  return (
+    <div className="answer-card__body space-y-2">
+      <div className="answer-card__text whitespace-pre-wrap break-words">
+        {displayText}
+        {hasMore ? <span className="answer-card__fade" aria-hidden="true" /> : null}
+      </div>
+      <div className="answer-card__controls">
+        {hasMore ? (
+          <button
+            type="button"
+            className="answer-card__control"
+            onClick={() =>
+              setVisibleCount((current) =>
+                Math.min(length, current + ANSWER_EXPAND_STEP)
+              )
+            }
+          >
+            Открыть больше
+          </button>
+        ) : null}
+        {canCollapse ? (
+          <button
+            type="button"
+            className="answer-card__control"
+            onClick={() =>
+              setVisibleCount(Math.min(length, INITIAL_ANSWER_PREVIEW))
+            }
+          >
+            Свернуть
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

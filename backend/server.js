@@ -1367,6 +1367,12 @@ app.get(
     const questionMap = new Map(
       questionStructure.flatQuestions.map((entry) => [entry.index, entry.text])
     );
+    const answerMap = new Map();
+    answers.forEach((entry) => {
+      const idx = Number(entry.question_index);
+      if (!Number.isFinite(idx)) return;
+      answerMap.set(idx, entry);
+    });
     const user = presentUser(userRow);
 
     const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
@@ -1443,52 +1449,132 @@ app.get(
       })
     ];
 
-    if (answers.length === 0) {
+    const usedAnswerIndices = new Set();
+    const chapterEntries = questionStructure.chapters
+      .map((chapter, idx) => {
+        const questions = Array.isArray(chapter?.questions) ? chapter.questions : [];
+        const items = questions
+          .map((question, qIdx) => {
+            const questionIndex = Number(question?.index);
+            if (!Number.isFinite(questionIndex)) {
+              return null;
+            }
+            const answerEntry = answerMap.get(questionIndex);
+            const answerText =
+              typeof answerEntry?.answer_text === 'string'
+                ? answerEntry.answer_text.trim()
+                : '';
+            if (!answerText.length) {
+              return null;
+            }
+            usedAnswerIndices.add(questionIndex);
+            const questionText =
+              typeof question?.text === 'string' && question.text.trim().length
+                ? question.text
+                : questionMap.get(questionIndex) ?? `Вопрос ${questionIndex + 1}`;
+            return {
+              questionIndex,
+              questionText,
+              answerText,
+              itemNumber: qIdx + 1,
+              chapterNumber: idx + 1
+            };
+          })
+          .filter(Boolean);
+
+        if (items.length === 0) {
+          return null;
+        }
+
+        const chapterLabel = chapter.title
+          ? `Глава ${idx + 1}. ${chapter.title}`
+          : `Глава ${idx + 1}`;
+
+        return {
+          title: chapterLabel,
+          items
+        };
+      })
+      .filter(Boolean);
+
+    const orphanItems = [];
+    answerMap.forEach((entry, questionIndex) => {
+      if (usedAnswerIndices.has(questionIndex)) return;
+      const answerText =
+        typeof entry?.answer_text === 'string' ? entry.answer_text.trim() : '';
+      if (!answerText.length) return;
+      const questionText =
+        questionMap.get(questionIndex) ?? `Вопрос ${questionIndex + 1}`;
+      orphanItems.push({
+        questionIndex,
+        questionText,
+        answerText,
+        itemNumber: orphanItems.length + 1,
+        chapterNumber: null
+      });
+    });
+
+    if (orphanItems.length > 0) {
+      chapterEntries.push({
+        title: 'Без главы',
+        items: orphanItems
+      });
+    }
+
+    if (chapterEntries.length === 0) {
       docChildren.push(
         new Paragraph({
           text: 'Ответы пока не сохранены.'
         })
       );
     } else {
-      answers.forEach((entry) => {
-        const rawIndex = Number(entry.question_index);
-        const questionIndex = Number.isFinite(rawIndex) ? rawIndex : 0;
-        const questionText = questionMap.get(questionIndex) ?? `Вопрос ${questionIndex + 1}`;
-
+      chapterEntries.forEach((entry) => {
         docChildren.push(
           new Paragraph({
-            children: [
-              new TextRun({
-                text: `${questionIndex + 1}. ${questionText}`,
-                bold: true
-              })
-            ],
-            spacing: { after: 120 }
+            text: entry.title,
+            heading: HeadingLevel.HEADING2,
+            spacing: { before: 240, after: 200 }
           })
         );
 
-        const runs = [];
-        const answerText = typeof entry.answer_text === 'string' ? entry.answer_text : '';
-        const normalized = answerText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimEnd();
+        entry.items.forEach((item) => {
+          docChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `${item.itemNumber}. ${item.questionText}`,
+                  bold: true
+                })
+              ],
+              spacing: { after: 120 }
+            })
+          );
 
-        if (!normalized.length) {
-          runs.push(new TextRun({ text: '—' }));
-        } else {
-          const lines = normalized.split('\n');
-          lines.forEach((line, index) => {
-            if (index > 0) {
-              runs.push(new TextRun({ break: 1 }));
-            }
-            runs.push(new TextRun({ text: line }));
-          });
-        }
+          const runs = [];
+          const normalized = item.answerText
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n')
+            .trimEnd();
 
-        docChildren.push(
-          new Paragraph({
-            children: runs,
-            spacing: { after: 300 }
-          })
-        );
+          if (!normalized.length) {
+            runs.push(new TextRun({ text: '—' }));
+          } else {
+            const lines = normalized.split('\n');
+            lines.forEach((line, lineIndex) => {
+              if (lineIndex > 0) {
+                runs.push(new TextRun({ break: 1 }));
+              }
+              runs.push(new TextRun({ text: line }));
+            });
+          }
+
+          docChildren.push(
+            new Paragraph({
+              children: runs,
+              spacing: { after: 300 }
+            })
+          );
+        });
       });
     }
 
