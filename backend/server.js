@@ -99,9 +99,19 @@ const answersSchema = z.object({
     .max(500)
 });
 
-const coverSchema = z.object({
-  name: z.string().max(500).optional()
-});
+const coverSchema = z
+  .object({
+    name: z.string().max(500).optional(),
+    slug: z.string().trim().max(120).optional(),
+    label: z.string().trim().max(500).optional(),
+    subtitle: z.string().trim().max(500).optional()
+  })
+  .refine((data) => {
+    if (data.slug && data.slug.trim().length > 0) return true;
+    return typeof data.name === 'string' && data.name.trim().length > 0;
+  }, {
+    message: 'INVALID_COVER'
+  });
 
 const orderSchema = z.object({
   ordered: z.coerce.boolean()
@@ -560,14 +570,185 @@ function normalizeUserEmail(email) {
   return trimmed;
 }
 
+function parseCoverRowValue(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'object' && raw !== null) {
+    const slug = typeof raw.slug === 'string' ? raw.slug : null;
+    const label = typeof raw.label === 'string' ? raw.label : null;
+    const subtitle = typeof raw.subtitle === 'string' ? raw.subtitle : null;
+    return { slug, label, subtitle };
+  }
+  if (typeof raw !== 'string') return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      const slug = typeof parsed.slug === 'string' ? parsed.slug : null;
+      const label = typeof parsed.label === 'string' ? parsed.label : null;
+      const subtitle = typeof parsed.subtitle === 'string' ? parsed.subtitle : null;
+      if (slug || label) {
+        return { slug, label, subtitle };
+      }
+    }
+  } catch (_error) {
+    // ignore parsing issues, fall back to legacy behaviour
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return {
+    slug: null,
+    label: trimmed,
+    subtitle: null
+  };
+}
+
+const COVER_DEFINITIONS = [
+  {
+    slug: 'custom',
+    title: 'Индивидуальный дизайн',
+    subtitle: 'Создадим обложку специально под вашу историю',
+    aliases: ['индивидуальный дизайн — создадим обложку специально под вашу историю']
+  },
+  {
+    slug: 'temp-1',
+    title: 'Нежный архив',
+    subtitle: 'Тёплые оттенки и мягкая фактура для семейных историй',
+    aliases: ['нежный архив — тёплые оттенки и мягкая фактура для семейных историй']
+  },
+  {
+    slug: 'temp-2',
+    title: 'Современная геометрия',
+    subtitle: 'Выразительная композиция и лаконичные линии',
+    aliases: ['современная геометрия — выразительная композиция и лаконичные линии', 'main_temp']
+  }
+];
+
+function matchCoverDefinitionByLabel(label) {
+  if (!label) return null;
+  const normalized = label.trim().toLowerCase();
+  if (!normalized) return null;
+  const direct =
+    COVER_DEFINITIONS.find((entry) => normalized === entry.title.trim().toLowerCase()) ?? null;
+  if (direct) return direct;
+  const startsWith =
+    COVER_DEFINITIONS.find((entry) =>
+      normalized.startsWith(entry.title.trim().toLowerCase())
+    ) ?? null;
+  if (startsWith) return startsWith;
+  return (
+    COVER_DEFINITIONS.find((entry) =>
+      Array.isArray(entry.aliases)
+        ? entry.aliases.some(
+            (alias) => typeof alias === 'string' && normalized === alias.trim().toLowerCase()
+          )
+        : false
+    ) ?? null
+  );
+}
+
+function normalizeCoverValue(rawValue) {
+  const parsed = parseCoverRowValue(rawValue);
+  if (!parsed) {
+    return {
+      payload: null,
+      slug: null,
+      title: null,
+      subtitle: null,
+      label: null,
+      raw: rawValue ?? null
+    };
+  }
+
+  let { slug, label, subtitle } = parsed;
+  if (typeof slug === 'string') {
+    slug = slug.trim();
+    if (!slug.length) slug = null;
+  }
+  if (typeof label === 'string') {
+    label = label.trim();
+    if (!label.length) label = null;
+  }
+  if (typeof subtitle === 'string') {
+    subtitle = subtitle.trim();
+    if (!subtitle.length) subtitle = null;
+  }
+
+  const definition = slug
+    ? COVER_DEFINITIONS.find((entry) => entry.slug === slug)
+    : matchCoverDefinitionByLabel(label);
+
+  const separators = [' — ', ' - ', '—', '-'];
+
+  const extractSubtitle = (text) => {
+    if (!text) return null;
+    for (const separator of separators) {
+      if (text.includes(separator)) {
+        const parts = text.split(separator);
+        if (parts.length > 1) {
+          const candidate = parts.slice(1).join(separator).trim();
+          if (candidate) {
+            return candidate;
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  const derivedSlug = slug ?? definition?.slug ?? null;
+  const title =
+    definition?.title ??
+    (label
+      ? (() => {
+          for (const separator of separators) {
+            if (label.includes(separator)) {
+              const candidate = label.split(separator)[0].trim();
+              if (candidate) return candidate;
+            }
+          }
+          return label.trim();
+        })()
+      : null);
+  let resolvedSubtitle = subtitle ?? definition?.subtitle ?? null;
+  if (!resolvedSubtitle && label) {
+    resolvedSubtitle = extractSubtitle(label);
+  }
+
+  const payload =
+    derivedSlug || label || resolvedSubtitle
+      ? {
+          slug: derivedSlug,
+          label,
+          subtitle: resolvedSubtitle
+        }
+      : null;
+
+  return {
+    payload,
+    slug: derivedSlug,
+    title,
+    subtitle: resolvedSubtitle,
+    label,
+    raw: rawValue ?? null
+  };
+}
+
 function presentUser(row) {
   const status = row.status ?? null;
+  const coverInfo = normalizeCoverValue(row.cover);
   return {
     id: row.id,
     name: row.name,
     email: normalizeUserEmail(row.email),
     isAdmin: !!row.is_admin,
-    cover: row.cover ?? null,
+    cover: coverInfo.payload,
+    coverSlug: coverInfo.slug,
+    coverTitle: coverInfo.title,
+    coverSubtitle: coverInfo.subtitle,
+    coverLabel:
+      coverInfo.label ??
+      coverInfo.title ??
+      (typeof row.cover === 'string' ? row.cover : null),
+    coverRaw: coverInfo.raw,
     ordered: !!row.ordered,
     status,
     statusLabel: status ? STATUS_LABELS[status] ?? null : null,
@@ -1073,11 +1254,31 @@ app.post(
   csrfRequired,
   writeLimiter,
   asyncHandler(async (req, res) => {
-    const { name } = parseBody(coverSchema, req.body);
-    const value = (name ?? '').trim();
-    const cover = value.length > 0 ? value : null;
-    await query('UPDATE app_users SET cover = $2 WHERE id = $1', [req.user.id, cover]);
-    res.json({ ok: true });
+    const { name, slug, label, subtitle } = parseBody(coverSchema, req.body);
+    let storedValue = null;
+    if (slug && slug.trim().length > 0) {
+      storedValue = JSON.stringify({
+        slug: slug.trim(),
+        label: typeof label === 'string' ? label.trim() : null,
+        subtitle: typeof subtitle === 'string' ? subtitle.trim() : null,
+        legacy: typeof name === 'string' && name.trim().length > 0 ? name.trim() : undefined
+      });
+    } else {
+      const value = (name ?? '').trim();
+      storedValue = value.length > 0 ? value : null;
+    }
+
+    await query('UPDATE app_users SET cover = $2 WHERE id = $1', [req.user.id, storedValue]);
+
+    const normalized = normalizeCoverValue(storedValue);
+    res.json({
+      ok: true,
+      cover: normalized.payload,
+      coverSlug: normalized.slug,
+      coverTitle: normalized.title,
+      coverSubtitle: normalized.subtitle,
+      coverLabel: normalized.label
+    });
   })
 );
 

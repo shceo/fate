@@ -2,6 +2,7 @@
 import { Link } from "react-router-dom";
 import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
+import mainCoverImage from "../assets/templets/main_temp.png";
 
 const steps = [
   {
@@ -47,19 +48,15 @@ export default function Home() {
                 Как это работает
               </a>
             </div>
-          </div>
+        </div>
           <div className="grid place-items-center">
-            <div className="relative w-[min(88vw,320px)] h-[min(120vw,420px)] rounded-[18px] overflow-hidden shadow-[0_30px_60px_rgba(80,60,40,.18),0_10px_20px_rgba(80,60,40,.12)] bg-gradient-to-br from-lav to-sky">
-              <div className="absolute inset-[10px] rounded-[14px] bg-[linear-gradient(135deg,rgba(255,255,255,.6),rgba(255,255,255,.1))] mix-blend-screen"></div>
-              <div className="absolute right-[-8px] top-[20px] w-[16px] h-[calc(100%-40px)] rounded-[3px] bg-[linear-gradient(180deg,#efe7dc,#f7f1ea)] drop-shadow-[0_6px_10px_rgba(0,0,0,.08)]"></div>
-              <div className="absolute top-4 left-4 px-2 py-1 rounded-full bg-white/70 backdrop-blur border border-white/80 text-[.8rem] text-[#5b5246]">
-                Глава 1 · Начало пути
-              </div>
-              <div className="absolute left-[22px] right-[22px] bottom-6 text-[#1e1d1b] font-serif text-[1.6rem] leading-tight">
-                «Каждая семья — это роман. Мы поможем его написать».
-                <br />
-                <span className="text-[.95rem] opacity-90">Fate Studio</span>
-              </div>
+            <div className="relative w-[min(88vw,340px)] h-[min(120vw,460px)] rounded-[18px] overflow-hidden shadow-[0_30px_60px_rgba(80,60,40,.18),0_10px_20px_rgba(80,60,40,.12)]">
+              <img
+                src={mainCoverImage}
+                alt="Пример печатной обложки Fate"
+                className="absolute inset-0 h-full w-full object-cover"
+                loading="eager"
+              />
             </div>
           </div>
         </div>

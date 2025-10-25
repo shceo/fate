@@ -1,9 +1,10 @@
-﻿import React from "react";
+import React from "react";
 import { Link } from "react-router-dom";
 import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
 import { useAuth } from "../shared/AuthContext.jsx";
 import { useQuestions } from "../shared/QuestionsContext.jsx";
+import { resolveCoverDisplay } from "../shared/coverTemplates.js";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -20,7 +21,14 @@ export default function Dashboard() {
       : null;
   const showQuestionsButton = hasQuestions && !interviewLocked;
   const loadingQuestions = loading || !loaded;
-  const coverLabel = user?.cover ?? "Обложка ещё не выбрана";
+  const coverSource = {
+    slug: user?.cover?.slug ?? user?.coverSlug ?? null,
+    label: user?.cover?.label ?? user?.coverTitle ?? user?.coverLabel ?? null,
+    subtitle: user?.cover?.subtitle ?? user?.coverSubtitle ?? null,
+  };
+  const coverDisplay = resolveCoverDisplay(coverSource);
+  const coverTemplate = coverDisplay.template;
+  const hasCover = Boolean(coverDisplay.title);
 
   return (
     <div>
@@ -36,15 +44,33 @@ export default function Dashboard() {
               Здесь собрана основная информация о вашем проекте. При необходимости вы всегда можете перейти к заполнению вопросов.
             </p>
           </div>
-          <div className="border-t border-dashed border-line pt-4">
-            <div className="font-semibold mb-2">Обложка</div>
-            <div className="flex items-center gap-2">
-              <div className="cover bg-gradient-to-br from-blush to-lav w-[84px] min-w-[84px]">
-                <div className="meta">{coverLabel}</div>
+          <div className="border-t border-dashed border-line pt-4 space-y-2">
+            <div className="font-semibold">Обложка</div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="w-[110px] h-[150px] rounded-[16px] overflow-hidden shadow-tiny border border-line bg-gradient-to-br from-lav to-sky">
+                {coverTemplate?.image ? (
+                  <img
+                    src={coverTemplate.image}
+                    alt={coverDisplay.title ?? "Выбранный шаблон обложки"}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="grid h-full place-items-center px-3 text-center text-sm text-white/90">
+                    {hasCover ? coverDisplay.title : "Шаблон не выбран"}
+                  </div>
+                )}
               </div>
-              <Link className="btn" to="/covers">
-                Выбрать обложку
-              </Link>
+              <div className="space-y-1 min-w-[200px]">
+                <div className="font-semibold">
+                  {coverDisplay.title ?? "Обложка ещё не выбрана"}
+                </div>
+                <div className="text-muted text-sm">
+                  {coverDisplay.subtitle ?? "Выберите шаблон, чтобы мы могли подготовить обложку."}
+                </div>
+                <Link className="btn mt-2" to="/covers">
+                  {hasCover ? "Изменить обложку" : "Выбрать обложку"}
+                </Link>
+              </div>
             </div>
           </div>
 

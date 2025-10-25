@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
   useCallback,
   useEffect,
   useMemo,
@@ -8,6 +8,7 @@
 import { useParams } from "react-router-dom";
 import { apiDelete, apiPost } from "../../shared/api.js";
 import { useBodyScrollLock } from "../../shared/useBodyScrollLock.js";
+import { resolveCoverDisplay } from "../../shared/coverTemplates.js";
 
 function sanitizeQuestions(source) {
   return (Array.isArray(source) ? source : [])
@@ -156,6 +157,22 @@ export default function UserDetail() {
   const [exportError, setExportError] = useState(null);
 
   useBodyScrollLock(questionsModalOpen);
+
+  const coverDisplay = useMemo(() => {
+    const source = {
+      slug: data?.cover?.slug ?? data?.coverSlug ?? null,
+      label: data?.cover?.label ?? data?.coverTitle ?? data?.coverLabel ?? null,
+      subtitle: data?.cover?.subtitle ?? data?.coverSubtitle ?? null,
+    };
+    return resolveCoverDisplay(source);
+  }, [
+    data?.cover,
+    data?.coverSlug,
+    data?.coverTitle,
+    data?.coverLabel,
+    data?.coverSubtitle,
+  ]);
+  const coverTemplate = coverDisplay.template;
 
   const showStatusNotice = useCallback((message, tone = "info") => {
     setStatusNotice({ message, tone });
@@ -1221,10 +1238,30 @@ export default function UserDetail() {
           <div className="text-muted break-all">{data.email}</div>
         </div>
 
-        <div>
-          <div className="font-semibold mb-2">Обложка</div>
-          <div className="cover bg-gradient-to-br from-blush to-lav w-[120px]">
-            <div className="meta">{data.cover || "Нет обложки"}</div>
+        <div className="space-y-2">
+          <div className="font-semibold">Обложка</div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-[120px] h-[160px] rounded-[16px] overflow-hidden shadow-tiny border border-line bg-gradient-to-br from-lav to-sky">
+              {coverTemplate?.image ? (
+                <img
+                  src={coverTemplate.image}
+                  alt={coverDisplay.title ?? "Выбранный шаблон обложки"}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="grid h-full place-items-center px-3 text-center text-sm text-white/90">
+                  {coverDisplay.title ?? "Шаблон не выбран"}
+                </div>
+              )}
+            </div>
+            <div className="space-y-1 min-w-[200px]">
+              <div className="font-semibold">
+                {coverDisplay.title ?? "Обложка не выбрана"}
+              </div>
+              <div className="text-muted text-sm">
+                {coverDisplay.subtitle ?? "Пользователь пока не выбрал шаблон обложки."}
+              </div>
+            </div>
           </div>
         </div>
 
