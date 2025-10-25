@@ -392,6 +392,26 @@ async function loadUserQuestionMap(userId, client) {
   };
 }
 
+function presentQuestionStructure(structure) {
+  return {
+    chapters: structure.chapters.map((chapter) => ({
+      id: chapter.id,
+      position: chapter.position,
+      title: chapter.title,
+      startIndex: chapter.startIndex,
+      questionCount: chapter.questionCount
+    })),
+    questions: structure.flatQuestions.map((entry) => ({
+      id: entry.id,
+      index: entry.index,
+      chapterId: entry.chapterId,
+      chapterPosition: entry.chapterPosition,
+      text: entry.text
+    })),
+    totalQuestions: structure.totalQuestions
+  };
+}
+
 async function pruneUserAnswers(userId, totalQuestions, client) {
   const run = getQueryRunner(client);
   await run(
@@ -995,22 +1015,7 @@ app.get(
   authRequired,
   asyncHandler(async (req, res) => {
     const structure = await loadUserQuestionMap(req.user.id);
-    res.json({
-      chapters: structure.chapters.map((chapter) => ({
-        id: chapter.id,
-        position: chapter.position,
-        title: chapter.title,
-        startIndex: chapter.startIndex,
-        questionCount: chapter.questionCount
-      })),
-      questions: structure.flatQuestions.map((entry) => ({
-        id: entry.id,
-        index: entry.index,
-        chapterId: entry.chapterId,
-        chapterPosition: entry.chapterPosition,
-        text: entry.text
-      }))
-    });
+    res.json(presentQuestionStructure(structure));
   })
 );
 
@@ -1569,6 +1574,20 @@ app.post(
   })
 );
 
+app.get(
+  '/api/admin/users/:id/questions',
+  authRequired,
+  adminRequired,
+  asyncHandler(async (req, res) => {
+    const user = await fetchUserById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    const structure = await loadUserQuestionMap(user.id);
+    res.json(presentQuestionStructure(structure));
+  })
+);
+
 app.post(
   '/api/admin/users/:id/questions',
   authRequired,
@@ -1596,53 +1615,135 @@ app.post(
       return res.status(404).json({ error: 'NOT_FOUND' });
     }
 
-    const result = await transaction(async (client) => {
-      await ensureUserChapters(user.id, client);
-      const chapterRes = await client.query(
-        `SELECT id
-         FROM user_question_chapters
-         WHERE id = $1
-           AND user_id = $2`,
-        [chapterId, user.id]
-      );
-      if (chapterRes.rowCount === 0) {
-        const err = new Error('CHAPTER_NOT_FOUND');
-        err.status = 404;
-        throw err;
-      }
+    const logContext = {
+      userId: user.id,
+      chapterId,
+      mode,
+      requestCount: questions.length
+    };
+    console.info('[admin:addQuestions] start', logContext);
 
-      if (mode === 'replace') {
-        await client.query('DELETE FROM user_questions WHERE chapter_id = $1', [chapterId]);
-      }
-
-      let chapterPositionStart = 0;
-      if (mode === 'append') {
-        const maxRes = await client.query(
-          `SELECT COALESCE(MAX(chapter_position), -1) AS max
-           FROM user_questions
-           WHERE chapter_id = $1`,
-          [chapterId]
+    try {
+      const result = await transaction(async (client) => {
+        await ensureUserChapters(user.id, client);
+        const chapterRes = await client.query(
+          `SELECT id, position, title
+           FROM user_question_chapters
+           WHERE id = $1
+             AND user_id = $2`,
+          [chapterId, user.id]
         );
-        chapterPositionStart = Number(maxRes.rows[0]?.max ?? -1) + 1;
+        if (chapterRes.rowCount === 0) {
+          const err = new Error('CHAPTER_NOT_FOUND');
+          err.status = 404;
+          throw err;
+        }
+
+        if (mode === 'replace') {
+          await client.query(
+            `DELETE FROM user_questions
+             WHERE user_id = $1
+               AND chapter_id = $2`,
+            [user.id, chapterId]
+          );
+        }
+
+        let added = 0;
+        if (questions.length > 0) {
+          let chapterPositionStart = 0;
+          if (mode === 'append') {
+            const maxRes = await client.query(
+              `SELECT COALESCE(MAX(chapter_position), -1) AS max
+               FROM user_questions
+               WHERE user_id = $1
+                 AND chapter_id = $2`,
+              [user.id, chapterId]
+            );
+            chapterPositionStart = Number(maxRes.rows[0]?.max ?? -1) + 1;
+          }
+
+          for (let idx = 0; idx < questions.length; idx += 1) {
+            const chapterPosition =
+              mode === 'append' ? chapterPositionStart + idx : idx;
+            await client.query(
+              `INSERT INTO user_questions (user_id, chapter_id, position, chapter_position, text)
+               VALUES ($1, $2, 0, $3, $4)`,
+              [user.id, chapterId, chapterPosition, questions[idx]]
+            );
+            added += 1;
+          }
+        }
+
+        const total = await resequenceUserQuestions(user.id, client);
+        await pruneUserAnswers(user.id, total, client);
+
+        return {
+          added,
+          total,
+          chapter: {
+            id: chapterRes.rows[0].id,
+            position: chapterRes.rows[0].position,
+            title: chapterRes.rows[0].title
+          }
+        };
+      });
+
+      const structure = await loadUserQuestionMap(user.id);
+      const chapterPayload =
+        structure.chapters.find((chapter) => chapter.id === chapterId) ?? null;
+
+      console.info('[admin:addQuestions] success', {
+        ...logContext,
+        added: result.added,
+        totalQuestions: result.total
+      });
+
+      res.json({
+        ok: true,
+        mode,
+        chapterId,
+        added: result.added,
+        total: result.total,
+        totalQuestions: structure.totalQuestions,
+        chapter: chapterPayload
+          ? {
+              id: chapterPayload.id,
+              position: chapterPayload.position,
+              title: chapterPayload.title,
+              startIndex: chapterPayload.startIndex,
+              questionCount: chapterPayload.questionCount
+            }
+          : {
+              ...result.chapter,
+              startIndex: null,
+              questionCount: null
+            }
+      });
+    } catch (error) {
+      console.error('[admin:addQuestions] failed', {
+        ...logContext,
+        errorCode: error.code ?? null,
+        message: error.message
+      });
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message });
       }
-
-      for (let idx = 0; idx < questions.length; idx += 1) {
-        await client.query(
-          `INSERT INTO user_questions (user_id, chapter_id, position, chapter_position, text)
-           VALUES ($1, $2, 0, $3, $4)`,
-          [user.id, chapterId, mode === 'append' ? chapterPositionStart + idx : idx, questions[idx]]
-        );
+      if (error.code === '23505') {
+        return res.status(409).json({
+          error: 'DUPLICATE_QUESTION',
+          constraint: error.constraint,
+          detail: error.detail ?? undefined
+        });
       }
-
-      const total = await resequenceUserQuestions(user.id, client);
-      await pruneUserAnswers(user.id, total, client);
-
-      return {
-        total
-      };
-    });
-
-    res.json({ ok: true, count: result.total });
+      if (error.code === '23503') {
+        return res.status(409).json({
+          error: 'INVALID_REFERENCE',
+          constraint: error.constraint,
+          detail: error.detail ?? undefined
+        });
+      }
+      return res.status(500).json({ error: 'FAILED_TO_ADD_QUESTIONS' });
+    }
   })
 );
 

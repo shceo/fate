@@ -278,7 +278,7 @@ function NavItem({ to, end, icon, children }) {
       end={end}
       className={({ isActive }) =>
         [
-          "flex items-center gap-3 px-3 py-2 rounded-[14px] border transition",
+          "admin-nav__item flex items-center gap-3 px-3 py-2 rounded-[14px] border transition",
           isActive
             ? "bg-white/80 border-line shadow-tiny"
             : "border-transparent hover:bg-white/50",
@@ -302,14 +302,14 @@ export default function AdminLayout() {
   const { logout } = useAuth();
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(90rem_60rem_at_-10%_-10%,#F1E6D6_0%,transparent_60%),_radial-gradient(80rem_60rem_at_110%_10%,#F7EDE4_0%,transparent_55%),_#F5EFE6]">
-      <div className="container mx-auto px-4 py-6 grid gap-6 md:grid-cols-[260px_1fr]">
-        <aside className="paper p-4 h-min sticky top-6">
-          <div className="flex flex-col gap-2 mb-3">
+    <div className="admin-layout min-h-screen bg-[radial-gradient(90rem_60rem_at_-10%_-10%,#F1E6D6_0%,transparent_60%),_radial-gradient(80rem_60rem_at_110%_10%,#F7EDE4_0%,transparent_55%),_#F5EFE6]">
+      <div className="admin-shell container mx-auto px-4 py-6 grid gap-6 md:grid-cols-[260px_1fr]">
+        <aside className="admin-nav paper p-4 h-min sticky top-6">
+          <div className="admin-nav__header flex flex-col gap-2 mb-3">
             <Logo className="h-10 max-w-[50px]" />
             <div className="font-serif text-[1.2rem]">Админка</div>
           </div>
-          <nav className="space-y-2">
+          <nav className="admin-nav__list space-y-2">
             <NavItem to="/admin" end icon={navIcons.clients}>
               Клиенты
             </NavItem>
@@ -320,13 +320,13 @@ export default function AdminLayout() {
               Настройки
             </NavItem>
           </nav>
-          <hr className="hairline" />
-          <button className="btn w-full" onClick={logout}>
+          <hr className="hairline admin-nav__divider" />
+          <button className="btn w-full admin-nav__logout" onClick={logout}>
             Выйти
           </button>
         </aside>
 
-        <main className="space-y-4">
+        <main className="admin-content space-y-4">
           <Outlet />
         </main>
       </div>

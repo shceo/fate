@@ -1,4 +1,5 @@
 import React from "react";
+import { useBodyScrollLock } from "../shared/useBodyScrollLock.js";
 
 export default function ConfirmDialog({
   open,
@@ -11,6 +12,7 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }) {
+  useBodyScrollLock(open);
   if (!open) return null;
 
   const confirmClasses = ["btn"];
@@ -39,7 +41,7 @@ export default function ConfirmDialog({
       <div className="modal-card">
         {title && <h3 className="font-serif text-[1.4rem]">{title}</h3>}
         {renderMessage()}
-        <div className="flex justify-end gap-2 mt-4">
+        <div className="flex justify-end gap-2 mt-4 modal-actions">
           {showCancel && (
             <button
               type="button"
@@ -63,4 +65,3 @@ export default function ConfirmDialog({
     </div>
   );
 }
-

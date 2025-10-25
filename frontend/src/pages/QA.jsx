@@ -33,14 +33,13 @@ function sanitizeIndex(rawIndex, total) {
   if (total <= 0) return 0;
   const value = Number(rawIndex);
   if (!Number.isFinite(value)) return 0;
-  return Math.min(Math.max(value, 0), total - 1);
+  return Math.min(Math.max(Math.floor(value), 0), total - 1);
 }
 
 function normalizeChapters(rawChapters, totalQuestions) {
   const total = Math.max(0, totalQuestions);
   const list = Array.isArray(rawChapters) ? rawChapters : [];
 
-  // сортировка по position/startIndex
   const sorted = [...list].sort((a, b) => {
     const aPos = Number.isFinite(Number(a?.position))
       ? Number(a.position)
@@ -51,44 +50,63 @@ function normalizeChapters(rawChapters, totalQuestions) {
     return aPos - bPos;
   });
 
-  // первичный проход — расставляем start / end (end может быть временно null)
-  const prelim = sorted.map((ch, i) => {
-    const start = sanitizeIndex(ch?.startIndex ?? 0, total || 1);
-    const declared = Number(ch?.questionCount ?? 0);
-    let end = null;
-    if (Number.isFinite(declared) && declared > 0) {
-      end = Math.min(start + declared - 1, Math.max(total - 1, start));
+  let cursor = 0;
+
+  return sorted.map((ch, i) => {
+    const rawStart = Number.isFinite(Number(ch?.startIndex))
+      ? Math.max(0, Math.floor(Number(ch.startIndex)))
+      : cursor;
+    const rawCount = Number.isFinite(Number(ch?.questionCount))
+      ? Math.max(0, Math.floor(Number(ch.questionCount)))
+      : 0;
+
+    const remainingSlots = Math.max(0, total - cursor);
+    const count =
+      rawCount > 0 ? Math.min(rawCount, remainingSlots) : 0;
+
+    let start = rawStart;
+    if (count > 0) {
+      const maxStart = Math.max(0, total - count);
+      start = Math.min(Math.max(start, cursor), maxStart);
+    } else {
+      start = Math.min(Math.max(start, cursor), total);
     }
+
+    let end = count > 0 ? start + count - 1 : start - 1;
+    if (count > 0 && total > 0) {
+      const maxEnd = total - 1;
+      if (end > maxEnd) {
+        end = maxEnd;
+        start = Math.max(0, end - count + 1);
+      }
+    }
+
+    cursor = count > 0 ? end + 1 : Math.max(cursor, start);
+
     return {
       ...ch,
       __idx: i,
-      start,
-      end, // временно
       key: chapterKeyFor(ch, i),
       title: typeof ch?.title === "string" ? ch.title.trim() : "",
+      start,
+      end,
+      count,
+      originalStartIndex: rawStart,
     };
   });
-
-  // второй проход — закрываем "дырки": если end === null → до следующей главы - 1 или до конца
-  for (let i = 0; i < prelim.length; i += 1) {
-    if (prelim[i].end == null) {
-      const next = prelim[i + 1];
-      const lastIndex = Math.max(total - 1, prelim[i].start);
-      prelim[i].end = next ? Math.min(next.start - 1, lastIndex) : lastIndex;
-    }
-  }
-
-  // отбрасываем пустые/пересекающиеся отрицательные диапазоны
-  const normalized = prelim.filter((ch) => ch.end >= ch.start);
-
-  return normalized;
 }
 
 function buildIndexMap(totalQuestions, normalizedChapters) {
   const total = Math.max(0, totalQuestions);
   const map = new Array(total).fill(-1);
   normalizedChapters.forEach((ch, idx) => {
-    for (let i = ch.start; i <= ch.end; i += 1) {
+    const count = Number.isFinite(ch?.count) ? Math.max(0, ch.count) : 0;
+    const start = Number.isFinite(ch?.start) ? Math.max(0, Math.floor(ch.start)) : 0;
+    const end = Number.isFinite(ch?.end)
+      ? Math.max(start, Math.floor(ch.end))
+      : start + count - 1;
+    if (count <= 0 || end < start) return;
+    for (let i = start; i <= end && i < total; i += 1) {
       map[i] = idx;
     }
   });
@@ -96,7 +114,15 @@ function buildIndexMap(totalQuestions, normalizedChapters) {
 }
 
 function chapterCount(ch) {
-  return Math.max(0, ch.end - ch.start + 1);
+  if (Number.isFinite(ch?.count)) {
+    return Math.max(0, ch.count);
+  }
+  if (Number.isFinite(ch?.questionCount)) {
+    return Math.max(0, ch.questionCount);
+  }
+  const start = Number.isFinite(ch?.start) ? ch.start : 0;
+  const end = Number.isFinite(ch?.end) ? ch.end : start - 1;
+  return Math.max(0, Math.floor(end) - Math.floor(start) + 1);
 }
 
 function formatChapterTitle(chapter, index) {
@@ -168,13 +194,27 @@ export default function QA() {
   const activeChapter =
     activeChapterIndex >= 0 ? normalizedChapters[activeChapterIndex] : null;
 
-  const chapterStartIndex = activeChapter ? activeChapter.start : 0;
-  const chapterEndIndex = activeChapter
-    ? activeChapter.end
-    : Math.max(totalQuestions - 1, 0);
+  const hasAnyQuestions = totalQuestions > 0;
+
   const chapterQuestionCount = activeChapter
     ? chapterCount(activeChapter)
     : totalQuestions;
+
+  const chapterStartIndex = activeChapter
+    ? hasAnyQuestions
+      ? sanitizeIndex(activeChapter?.start ?? 0, totalQuestions)
+      : 0
+    : 0;
+
+  const chapterEndIndex = (() => {
+    if (!hasAnyQuestions) return 0;
+    if (!activeChapter) return Math.max(totalQuestions - 1, 0);
+    if (chapterQuestionCount === 0) return chapterStartIndex;
+    const rawEnd = Number.isFinite(Number(activeChapter.end))
+      ? Number(activeChapter.end)
+      : Number(activeChapter.start ?? 0);
+    return Math.max(chapterStartIndex, sanitizeIndex(rawEnd, totalQuestions));
+  })();
 
   // ---------- Очистка таймеров ----------
   const handleCleanup = useCallback(() => {
@@ -274,7 +314,11 @@ export default function QA() {
 
     const safeIndex = sanitizeIndex(targetIndex, totalQuestions);
     const chIdx = indexMap[safeIndex];
-    if (chIdx === -1) {
+    if (
+      !Number.isInteger(chIdx) ||
+      chIdx < 0 ||
+      chIdx >= normalizedChapters.length
+    ) {
       initialSelectionAppliedRef.current = true;
       return;
     }
@@ -355,10 +399,10 @@ export default function QA() {
   const handleOpenChapter = useCallback(
     (chapter, idx) => {
       const key = chapterKeyFor(chapter, idx);
-      const start = sanitizeIndex(
-        chapter?.startIndex ?? 0,
-        totalQuestions || 1
-      );
+      const baseStart = Number.isFinite(Number(chapter?.start))
+        ? Number(chapter.start)
+        : Number(chapter?.startIndex ?? 0);
+      const start = sanitizeIndex(baseStart, totalQuestions || 1);
       setActiveChapterKey(key);
       setCurrentIndex(start);
     },

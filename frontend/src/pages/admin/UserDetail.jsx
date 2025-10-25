@@ -7,6 +7,7 @@
 } from "react";
 import { useParams } from "react-router-dom";
 import { apiDelete, apiPost } from "../../shared/api.js";
+import { useBodyScrollLock } from "../../shared/useBodyScrollLock.js";
 
 function sanitizeQuestions(source) {
   return (Array.isArray(source) ? source : [])
@@ -49,6 +50,67 @@ function formatDaysLabel(value) {
   return `${value} дней`;
 }
 
+function pluralizeQuestions(count) {
+  const abs = Math.abs(count);
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+  if (mod10 === 1 && mod100 !== 11) return "вопрос";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
+    return "вопроса";
+  }
+  return "вопросов";
+}
+
+function formatQuestionOperationMessage(mode, added, chapter) {
+  const addedCount = Number.isFinite(Number(added)) ? Number(added) : 0;
+  const totalInChapter = Number.isFinite(Number(chapter?.questionCount))
+    ? Number(chapter.questionCount)
+    : null;
+
+  if (mode === "replace") {
+    if (totalInChapter === 0) {
+      return "Глава очищена: вопросов нет.";
+    }
+    if (totalInChapter != null) {
+      return `Глава обновлена: сохранено ${totalInChapter} ${pluralizeQuestions(
+        totalInChapter
+      )}.`;
+    }
+    return "Глава обновлена.";
+  }
+
+  if (addedCount === 0) {
+    if (totalInChapter == null) {
+      return "Новые вопросы не добавлены.";
+    }
+    return `Новые вопросы не добавлены. В главе по-прежнему ${totalInChapter} ${pluralizeQuestions(
+      totalInChapter
+    )}.`;
+  }
+
+  if (totalInChapter == null) {
+    return `Добавлено ${addedCount} ${pluralizeQuestions(addedCount)}.`;
+  }
+
+  return `Добавлено ${addedCount} ${pluralizeQuestions(
+    addedCount
+  )}. В главе теперь ${totalInChapter} ${pluralizeQuestions(totalInChapter)}.`;
+}
+
+function formatQuestionError(error, fallbackMessage) {
+  if (!error) return fallbackMessage;
+  if (error.code === "DUPLICATE_QUESTION") {
+    return "Не удалось сохранить: конфликт позиций вопросов. Обновите список и попробуйте снова.";
+  }
+  if (error.code === "INVALID_REFERENCE") {
+    return "Выбранная глава недоступна. Обновите данные и попробуйте ещё раз.";
+  }
+  if (typeof error.message === "string" && error.message.trim()) {
+    return error.message;
+  }
+  return fallbackMessage;
+}
+
 export default function UserDetail() {
   const { id } = useParams();
   const [data, setData] = useState(null);
@@ -59,6 +121,8 @@ export default function UserDetail() {
   const [statusNotice, setStatusNotice] = useState(null);
   const statusNoticeTimerRef = useRef(null);
   const [statusBusy, setStatusBusy] = useState(false);
+  const [questionsNotice, setQuestionsNotice] = useState(null);
+  const questionsNoticeTimerRef = useRef(null);
 
   const [mode, setMode] = useState("append");
   const [questionsModalOpen, setQuestionsModalOpen] = useState(false);
@@ -86,6 +150,8 @@ export default function UserDetail() {
   const [templateActionBusy, setTemplateActionBusy] = useState(false);
   const [templateActionError, setTemplateActionError] = useState(null);
 
+  useBodyScrollLock(questionsModalOpen);
+
   const showStatusNotice = useCallback((message, tone = "info") => {
     setStatusNotice({ message, tone });
     if (statusNoticeTimerRef.current) {
@@ -97,11 +163,26 @@ export default function UserDetail() {
     }, STATUS_NOTICE_DURATION);
   }, []);
 
+  const showQuestionsNotice = useCallback((message, tone = "success") => {
+    setQuestionsNotice({ message, tone });
+    if (questionsNoticeTimerRef.current) {
+      clearTimeout(questionsNoticeTimerRef.current);
+    }
+    questionsNoticeTimerRef.current = window.setTimeout(() => {
+      setQuestionsNotice(null);
+      questionsNoticeTimerRef.current = null;
+    }, STATUS_NOTICE_DURATION);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (statusNoticeTimerRef.current) {
         clearTimeout(statusNoticeTimerRef.current);
         statusNoticeTimerRef.current = null;
+      }
+      if (questionsNoticeTimerRef.current) {
+        clearTimeout(questionsNoticeTimerRef.current);
+        questionsNoticeTimerRef.current = null;
       }
     };
   }, []);
@@ -381,7 +462,7 @@ export default function UserDetail() {
     setManualBusy(true);
     setManualError(null);
     try {
-      await apiPost(`/api/admin/users/${id}/questions`, {
+      const payload = await apiPost(`/api/admin/users/${id}/questions`, {
         mode,
         chapterId: selectedChapterId,
         questions: single ? [single] : [],
@@ -390,10 +471,17 @@ export default function UserDetail() {
       setManualSingle("");
       setManualBulk("");
       await reload();
+      showQuestionsNotice(
+        formatQuestionOperationMessage(mode, payload?.added, payload?.chapter),
+        "success"
+      );
     } catch (error) {
       console.error(error);
       setManualError(
-        error.message || "Не удалось сохранить вопросы. Попробуйте ещё раз."
+        formatQuestionError(
+          error,
+          "Не удалось сохранить вопросы. Попробуйте ещё раз."
+        )
       );
     } finally {
       setManualBusy(false);
@@ -500,7 +588,7 @@ export default function UserDetail() {
     setTemplateActionBusy(true);
     setTemplateActionError(null);
     try {
-      await apiPost(`/api/admin/users/${id}/questions`, {
+      const payload = await apiPost(`/api/admin/users/${id}/questions`, {
         mode,
         chapterId: selectedChapterId,
         questions: prepared,
@@ -510,10 +598,17 @@ export default function UserDetail() {
       setSelectedTemplate(null);
       setSelectedTemplateQuestions([]);
       setEditableTemplateQuestions([]);
+      showQuestionsNotice(
+        formatQuestionOperationMessage(mode, payload?.added, payload?.chapter),
+        "success"
+      );
     } catch (error) {
       console.error(error);
       setTemplateActionError(
-        error.message || "Не удалось применить шаблон. Попробуйте ещё раз."
+        formatQuestionError(
+          error,
+          "Не удалось применить шаблон. Попробуйте ещё раз."
+        )
       );
     } finally {
       setTemplateActionBusy(false);
@@ -525,10 +620,14 @@ export default function UserDetail() {
     try {
       await apiDelete(`/api/admin/users/${id}/questions/${questionId}`);
       await reload();
+      showQuestionsNotice("Вопрос удалён.", "success");
     } catch (error) {
       console.error(error);
       setQuestionsError(
-        error.message || "Не удалось удалить вопрос. Попробуйте ещё раз."
+        formatQuestionError(
+          error,
+          "Не удалось удалить вопрос. Попробуйте ещё раз."
+        )
       );
     }
   };
@@ -597,6 +696,17 @@ export default function UserDetail() {
               <div className="space-y-1">
                 <h3 className="font-serif text-[1.6rem]">Управление вопросами</h3>
                 <div className="text-sm text-muted">{modeHint}</div>
+                {questionsModalOpen && questionsNotice ? (
+                  <div
+                    className={`text-sm ${
+                      questionsNotice.tone === "error"
+                        ? "text-[#b2563f]"
+                        : "text-[#1f5c3d]"
+                    }`}
+                  >
+                    {questionsNotice.message}
+                  </div>
+                ) : null}
                 {selectedChapter ? (
                   <div className="text-sm">
                     Текущая глава:
@@ -743,7 +853,7 @@ export default function UserDetail() {
                       <div className="text-sm text-[#b2563f]">{manualError}</div>
                     ) : null}
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-end modal-actions">
                       <button
                         className="btn primary"
                         type="submit"
@@ -789,7 +899,7 @@ export default function UserDetail() {
                                     {template.firstQuestion}
                                   </div>
                                 ) : null}
-                                <div className="flex justify-end">
+                                <div className="flex justify-end modal-actions">
                                   <button
                                     className="btn primary"
                                     onClick={() => handleTemplatePick(template)}
@@ -844,7 +954,7 @@ export default function UserDetail() {
                             {templateActionError}
                           </div>
                         ) : null}
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center justify-between gap-2 flex-wrap modal-actions">
                           <button
                             className="btn"
                             onClick={() => {
@@ -877,7 +987,7 @@ export default function UserDetail() {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center justify-between gap-2 flex-wrap modal-actions">
                           <div className="text-sm text-muted">
                             Вопросов: {cleanedEditableQuestions.length}
                           </div>
@@ -929,7 +1039,7 @@ export default function UserDetail() {
                             {templateActionError}
                           </div>
                         ) : null}
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center justify-between gap-2 flex-wrap modal-actions">
                           <button
                             className="btn"
                             type="button"
@@ -1089,6 +1199,16 @@ export default function UserDetail() {
               Управление вопросами
             </button>
           </div>
+
+          {!questionsModalOpen && questionsNotice ? (
+            <div
+              className={`text-sm ${
+                questionsNotice.tone === "error" ? "text-[#b2563f]" : "text-[#1f5c3d]"
+              }`}
+            >
+              {questionsNotice.message}
+            </div>
+          ) : null}
 
           {questionsError ? (
             <div className="text-sm text-[#b2563f]">{questionsError}</div>

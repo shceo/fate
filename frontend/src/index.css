@@ -373,6 +373,12 @@
     border:1px solid rgba(255,255,255,.75);
     box-shadow:var(--shadow-soft);
   }
+  .modal-actions{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:.5rem;
+  }
   .password-field{ position:relative; }
   .password-toggle{
     position:absolute;
@@ -399,5 +405,93 @@
   .password-toggle__icon{
     width:1.15rem;
     height:1.15rem;
+  }
+
+  @media (max-width: 768px) {
+    .admin-layout{
+      min-height:100vh;
+      padding-bottom:calc(48px + env(safe-area-inset-bottom,0px));
+    }
+    .admin-shell{
+      display:block;
+      padding-top:calc(120px + env(safe-area-inset-top,0px));
+      padding-bottom:2rem;
+    }
+    .admin-nav{
+      position:fixed;
+      top:0;
+      left:0;
+      right:0;
+      z-index:60;
+      border-radius:0;
+      border-bottom-left-radius:var(--radius-lg);
+      border-bottom-right-radius:var(--radius-lg);
+      display:flex;
+      flex-direction:column;
+      gap:.75rem;
+      padding:calc(env(safe-area-inset-top,0px) + .85rem) 1rem 1rem;
+      box-shadow:0 18px 32px rgba(110,92,74,.18);
+      backdrop-filter:saturate(160%) blur(12px);
+    }
+    .admin-nav__header{
+      flex-direction:row;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:0;
+    }
+    .admin-nav__header .font-serif{
+      font-size:1.05rem;
+    }
+    .admin-nav__list{
+      display:flex;
+      align-items:center;
+      gap:.6rem;
+      overflow-x:auto;
+      padding-bottom:.35rem;
+      margin:0 -.35rem;
+      scrollbar-width:none;
+    }
+    .admin-nav__list::-webkit-scrollbar{ display:none; }
+    .admin-nav__item{
+      flex:1 0 auto;
+      min-width:110px;
+      justify-content:center;
+      white-space:nowrap;
+    }
+    .admin-nav__item span:last-child{
+      font-size:.9rem;
+    }
+    .admin-nav__divider{
+      display:none;
+    }
+    .admin-nav__logout{
+      width:auto;
+      align-self:flex-end;
+      padding-inline:1rem;
+    }
+    .admin-content{
+      padding-top:1.5rem;
+      padding-bottom:2.5rem;
+    }
+    .modal-backdrop{
+      padding:clamp(0.75rem,4vw,1.5rem);
+      align-items:flex-start;
+    }
+    .modal-card{
+      width:min(600px,100%);
+      max-height:min(92vh,640px);
+      overflow-y:auto;
+      display:flex;
+      flex-direction:column;
+      padding:1.4rem clamp(1rem,4vw,1.6rem);
+    }
+    .modal-actions{
+      position:sticky;
+      bottom:0;
+      margin-top:.5rem;
+      padding-top:.75rem;
+      padding-bottom:calc(.35rem + env(safe-area-inset-bottom,0px));
+      background:linear-gradient(180deg,transparent 0%,rgba(250,247,242,.92) 45%,rgba(250,247,242,.98) 100%);
+    }
   }
 }
