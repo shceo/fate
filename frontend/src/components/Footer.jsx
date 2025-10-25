@@ -7,7 +7,7 @@ export default function Footer() {
       <div className="container mx-auto px-4 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <div className="font-serif text-[1.1rem]">
-            <Logo className="h-12 max-w-[200px]" />
+            <Logo className="h-12 max-w-[50px]" />
           </div>
           <div className="mt-1">© 2025 Fate. Все права защищены.</div>
         </div>

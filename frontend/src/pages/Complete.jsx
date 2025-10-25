@@ -1,10 +1,29 @@
-import React from "react";
+import React, { useEffect } from "react";
 import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
 import Progress from "../components/Progress.jsx";
+import { useAuth } from "../shared/AuthContext.jsx";
+import { getOrderStatusLabel } from "../shared/orderStatus.js";
 
 export default function Complete() {
-  const showStatus = false; // Измените на true, чтобы показать альтернативный пример статуса производства
+  const { user, refreshUser } = useAuth();
+  const ordered = Boolean(user?.ordered);
+  const orderStatusLabel =
+    user?.statusLabel ?? getOrderStatusLabel(user?.status);
+
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
+
+  const orderStatusHeading = ordered
+    ? "Заказ подтверждён"
+    : "Ожидает подтверждения";
+  const orderStatusDescription = ordered
+    ? "Мы уже работаем над вашей книгой и будем обновлять статус по мере продвижения."
+    : "Подтвердите заказ, чтобы мы могли перейти к подготовке книги.";
+  const projectStageText = orderStatusLabel
+    ? `Этап проекта: ${orderStatusLabel}.`
+    : "Статус проекта появится, как только редакция начнёт работу.";
 
   return (
     <div>
@@ -57,37 +76,16 @@ export default function Complete() {
 
           <div>
             <h3 className="mb-2">Статус производства</h3>
-            {!showStatus ? (
-              <div className="status">
-                <span className="text-lg" aria-hidden="true">
-                  ℹ️
-                </span>
-                <div>
-                  <div className="font-semibold">
-                    Рукопись передана в редакцию на согласование
-                  </div>
-                  <div className="text-muted">
-                    Мы сообщим, когда потребуется ваша обратная связь или будет
-                    готов первый макет книги.
-                  </div>
-                </div>
+            <div className="status">
+              <span className="text-lg" aria-hidden="true">
+                ℹ️
+              </span>
+              <div>
+                <div className="font-semibold">{orderStatusHeading}</div>
+                <div className="text-muted">{orderStatusDescription}</div>
+                <div className="text-muted mt-1">{projectStageText}</div>
               </div>
-            ) : (
-              <div className="status">
-                <span className="text-lg" aria-hidden="true">
-                  ✅
-                </span>
-                <div>
-                  <div className="font-semibold">
-                    Тираж готов: ожидает выдачи в студии Fate
-                  </div>
-                  <div className="text-muted">
-                    Куратор свяжется с вами в ближайшее время, чтобы согласовать
-                    дату получения.
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
             <p className="text-muted mt-2">
               (Эта страница всегда доступна в кабинете, чтобы вы могли отслеживать
               ход работы и обновления проекта.)

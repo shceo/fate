@@ -24,6 +24,8 @@ const STATUS_OPTIONS = [
   { value: "delivered", label: "Доставлено" },
 ];
 
+const STATUS_NOTICE_DURATION = 4000;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const deadlineDateFormatter = new Intl.DateTimeFormat("ru-RU", {
@@ -54,6 +56,9 @@ export default function UserDetail() {
   const [ordered, setOrdered] = useState(false);
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
   const statusPickerRef = useRef(null);
+  const [statusNotice, setStatusNotice] = useState(null);
+  const statusNoticeTimerRef = useRef(null);
+  const [statusBusy, setStatusBusy] = useState(false);
 
   const [mode, setMode] = useState("append");
   const [questionsModalOpen, setQuestionsModalOpen] = useState(false);
@@ -80,6 +85,26 @@ export default function UserDetail() {
   const [editableTemplateQuestions, setEditableTemplateQuestions] = useState([]);
   const [templateActionBusy, setTemplateActionBusy] = useState(false);
   const [templateActionError, setTemplateActionError] = useState(null);
+
+  const showStatusNotice = useCallback((message, tone = "info") => {
+    setStatusNotice({ message, tone });
+    if (statusNoticeTimerRef.current) {
+      clearTimeout(statusNoticeTimerRef.current);
+    }
+    statusNoticeTimerRef.current = window.setTimeout(() => {
+      setStatusNotice(null);
+      statusNoticeTimerRef.current = null;
+    }, STATUS_NOTICE_DURATION);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (statusNoticeTimerRef.current) {
+        clearTimeout(statusNoticeTimerRef.current);
+        statusNoticeTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const cleanedEditableQuestions = useMemo(
     () => sanitizeQuestions(editableTemplateQuestions),
@@ -112,10 +137,23 @@ export default function UserDetail() {
     await reload();
   };
 
-  const saveStatus = async () => {
-    await apiPost(`/api/admin/users/${id}/status`, { status: status || null });
-    await reload();
-  };
+  const saveStatus = useCallback(async () => {
+    if (statusBusy) return;
+    setStatusBusy(true);
+    try {
+      await apiPost(`/api/admin/users/${id}/status`, { status: status || null });
+      await reload();
+      showStatusNotice("Статус обновлён", "success");
+    } catch (error) {
+      console.error("Failed to update user status", error);
+      showStatusNotice(
+        error?.message || "Не удалось сохранить статус. Попробуйте ещё раз.",
+        "error"
+      );
+    } finally {
+      setStatusBusy(false);
+    }
+  }, [statusBusy, id, status, reload, showStatusNotice]);
 
   const chapters = useMemo(
     () => (Array.isArray(data?.chapters) ? data.chapters : []),
@@ -163,6 +201,20 @@ export default function UserDetail() {
   useEffect(() => {
     setStatusPickerOpen(false);
   }, [status]);
+
+  const statusNoticeElement = !statusNotice ? null : (
+    <div
+      className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-[16px] shadow-lg border ${
+        statusNotice.tone === "error"
+          ? "bg-[#fdecea] border-[#f3b8b5] text-[#8a2a21]"
+          : statusNotice.tone === "success"
+          ? "bg-[#e7f6ee] border-[#b7ddc3] text-[#1f5c3d]"
+          : "bg-[rgba(255,255,255,.95)] border-line text-[#2b2a27]"
+      }`}
+    >
+      {statusNotice.message}
+    </div>
+  );
 
   useEffect(() => {
     if (!chapters.length) {
@@ -905,7 +957,9 @@ export default function UserDetail() {
         </div>
       );
   return (
-    <div className="grid gap-4 md:grid-cols-[320px_1fr]">
+    <>
+      {statusNoticeElement}
+      <div className="grid gap-4 md:grid-cols-[320px_1fr]">
       <aside className="paper p-4 space-y-4">
         <div>
           <div className="font-serif text-xl mb-1">{data.name}</div>
@@ -1001,7 +1055,12 @@ export default function UserDetail() {
               })}
             </ul>
           </div>
-          <button className="btn mt-2" onClick={saveStatus}>
+          <button
+            className="btn mt-2"
+            onClick={saveStatus}
+            disabled={statusBusy}
+            type="button"
+          >
             Сохранить статус
           </button>
         </div>
@@ -1109,6 +1168,7 @@ export default function UserDetail() {
 
       {questionsModal}
     </div>
+    </>
   );
 }
 

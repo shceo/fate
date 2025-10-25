@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
   useCallback,
   useEffect,
   useMemo,
@@ -15,12 +15,13 @@ import { apiPost } from "../shared/api.js";
 import { useAuth } from "../shared/AuthContext.jsx";
 import { useQuestions } from "../shared/QuestionsContext.jsx";
 
+// ---------- Константы ----------
 const AUTO_SAVE_DELAY = 1500;
 const AUTO_SAVE_STATE_RESET = 4000;
-
 const TOAST_DURATION = 4000;
 const APPROX_DURATION_LABEL = "~30 минут";
 
+// ---------- Вспомогательные функции (вне компонента) ----------
 function chapterKeyFor(chapter, index) {
   if (chapter && chapter.id !== undefined && chapter.id !== null) {
     return String(chapter.id);
@@ -35,6 +36,76 @@ function sanitizeIndex(rawIndex, total) {
   return Math.min(Math.max(value, 0), total - 1);
 }
 
+function normalizeChapters(rawChapters, totalQuestions) {
+  const total = Math.max(0, totalQuestions);
+  const list = Array.isArray(rawChapters) ? rawChapters : [];
+
+  // сортировка по position/startIndex
+  const sorted = [...list].sort((a, b) => {
+    const aPos = Number.isFinite(Number(a?.position))
+      ? Number(a.position)
+      : Number(a?.startIndex ?? 0);
+    const bPos = Number.isFinite(Number(b?.position))
+      ? Number(b.position)
+      : Number(b?.startIndex ?? 0);
+    return aPos - bPos;
+  });
+
+  // первичный проход — расставляем start / end (end может быть временно null)
+  const prelim = sorted.map((ch, i) => {
+    const start = sanitizeIndex(ch?.startIndex ?? 0, total || 1);
+    const declared = Number(ch?.questionCount ?? 0);
+    let end = null;
+    if (Number.isFinite(declared) && declared > 0) {
+      end = Math.min(start + declared - 1, Math.max(total - 1, start));
+    }
+    return {
+      ...ch,
+      __idx: i,
+      start,
+      end, // временно
+      key: chapterKeyFor(ch, i),
+      title: typeof ch?.title === "string" ? ch.title.trim() : "",
+    };
+  });
+
+  // второй проход — закрываем "дырки": если end === null → до следующей главы - 1 или до конца
+  for (let i = 0; i < prelim.length; i += 1) {
+    if (prelim[i].end == null) {
+      const next = prelim[i + 1];
+      const lastIndex = Math.max(total - 1, prelim[i].start);
+      prelim[i].end = next ? Math.min(next.start - 1, lastIndex) : lastIndex;
+    }
+  }
+
+  // отбрасываем пустые/пересекающиеся отрицательные диапазоны
+  const normalized = prelim.filter((ch) => ch.end >= ch.start);
+
+  return normalized;
+}
+
+function buildIndexMap(totalQuestions, normalizedChapters) {
+  const total = Math.max(0, totalQuestions);
+  const map = new Array(total).fill(-1);
+  normalizedChapters.forEach((ch, idx) => {
+    for (let i = ch.start; i <= ch.end; i += 1) {
+      map[i] = idx;
+    }
+  });
+  return map;
+}
+
+function chapterCount(ch) {
+  return Math.max(0, ch.end - ch.start + 1);
+}
+
+function formatChapterTitle(chapter, index) {
+  const heading = `Глава ${index + 1}.`;
+  const subtitle = chapter?.title ? chapter.title : null;
+  return { heading, subtitle };
+}
+
+// =================== КОМПОНЕНТ ===================
 export default function QA() {
   const navigate = useNavigate();
   const { refreshUser, setUser, user } = useAuth();
@@ -54,6 +125,7 @@ export default function QA() {
     resumeIndex,
   } = useQuestions();
 
+  // ---------- State/Refs ----------
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeChapterKey, setActiveChapterKey] = useState(null);
   const [draft, setDraft] = useState("");
@@ -72,21 +144,39 @@ export default function QA() {
   const editVersionRef = useRef(0);
   const initialSelectionAppliedRef = useRef(false);
 
-  const chapterList = useMemo(() => {
-    if (!Array.isArray(chapters)) return [];
-    return [...chapters].sort((a, b) => {
-      const aPos =
-        Number.isFinite(Number(a?.position))
-          ? Number(a.position)
-          : Number(a?.startIndex ?? 0);
-      const bPos =
-        Number.isFinite(Number(b?.position))
-          ? Number(b.position)
-          : Number(b?.startIndex ?? 0);
-      return aPos - bPos;
-    });
-  }, [chapters]);
+  const totalQuestions = questions.length;
 
+  // ---------- Нормализация глав и карты индексов ----------
+  const normalizedChapters = useMemo(
+    () => normalizeChapters(chapters, totalQuestions),
+    [chapters, totalQuestions]
+  );
+
+  const indexMap = useMemo(
+    () => buildIndexMap(totalQuestions, normalizedChapters),
+    [totalQuestions, normalizedChapters]
+  );
+
+  // ---------- Текущая активная глава / её границы ----------
+  const activeChapterIndex = useMemo(() => {
+    if (activeChapterKey === null) return -1;
+    return normalizedChapters.findIndex(
+      (ch) => ch.key === String(activeChapterKey)
+    );
+  }, [normalizedChapters, activeChapterKey]);
+
+  const activeChapter =
+    activeChapterIndex >= 0 ? normalizedChapters[activeChapterIndex] : null;
+
+  const chapterStartIndex = activeChapter ? activeChapter.start : 0;
+  const chapterEndIndex = activeChapter
+    ? activeChapter.end
+    : Math.max(totalQuestions - 1, 0);
+  const chapterQuestionCount = activeChapter
+    ? chapterCount(activeChapter)
+    : totalQuestions;
+
+  // ---------- Очистка таймеров ----------
   const handleCleanup = useCallback(() => {
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
@@ -101,116 +191,59 @@ export default function QA() {
       toastTimerRef.current = null;
     }
   }, []);
-
   useEffect(() => handleCleanup, [handleCleanup]);
 
+  // ---------- Держим currentIndex валидным ----------
   useEffect(() => {
-    if (!questions.length) {
+    if (!totalQuestions) {
       setCurrentIndex(0);
       return;
     }
-    setCurrentIndex((prev) => sanitizeIndex(prev, questions.length));
-  }, [questions.length]);
+    setCurrentIndex((prev) => sanitizeIndex(prev, totalQuestions));
+  }, [totalQuestions]);
 
+  // ---------- Сброс активной главы, если её больше нет ----------
   useEffect(() => {
     if (activeChapterKey === null) return;
-    const exists = chapterList.some(
-      (chapter, index) =>
-        chapterKeyFor(chapter, index) === String(activeChapterKey)
+    const stillExists = normalizedChapters.some(
+      (ch) => ch.key === String(activeChapterKey)
     );
-    if (!exists) {
-      setActiveChapterKey(null);
-    }
-  }, [chapterList, activeChapterKey]);
+    if (!stillExists) setActiveChapterKey(null);
+  }, [normalizedChapters, activeChapterKey]);
 
-  const activeChapterIndex = useMemo(() => {
-    if (activeChapterKey === null) return -1;
-    return chapterList.findIndex(
-      (chapter, index) =>
-        chapterKeyFor(chapter, index) === String(activeChapterKey)
-    );
-  }, [chapterList, activeChapterKey]);
-
-  const activeChapter =
-    activeChapterIndex >= 0 ? chapterList[activeChapterIndex] ?? null : null;
-
-  const chapterStartIndex = useMemo(() => {
-    if (!activeChapter) return 0;
-    const raw = Number(activeChapter.startIndex ?? 0);
-    if (!Number.isFinite(raw) || raw < 0) return 0;
-    return sanitizeIndex(raw, questions.length || 1);
-  }, [activeChapter, questions.length]);
-
-  const chapterEndIndex = useMemo(() => {
-    if (!activeChapter) {
-      return Math.max(questions.length - 1, 0);
-    }
-    const start = sanitizeIndex(activeChapter.startIndex ?? 0, questions.length || 1);
-    const declared = Number(activeChapter.questionCount ?? 0);
-    if (Number.isFinite(declared) && declared > 0) {
-      return Math.min(start + declared - 1, Math.max(questions.length - 1, start));
-    }
-    const nextChapter = chapterList[activeChapterIndex + 1] ?? null;
-    if (nextChapter) {
-      const nextStart = sanitizeIndex(
-        nextChapter.startIndex ?? questions.length,
-        questions.length || 1
-      );
-      if (nextStart > start) {
-        return Math.min(nextStart - 1, Math.max(questions.length - 1, start));
-      }
-    }
-    return Math.max(questions.length - 1, start);
-  }, [activeChapter, chapterList, activeChapterIndex, questions.length]);
-
-  const chapterQuestionCount = useMemo(() => {
-    if (!questions.length) return 0;
-    if (!activeChapter) return questions.length;
-    const end = Math.max(chapterEndIndex, chapterStartIndex - 1);
-    return Math.max(0, end - chapterStartIndex + 1);
-  }, [questions.length, activeChapter, chapterStartIndex, chapterEndIndex]);
-
+  // ---------- Выставляем черновик при смене вопроса / ответов ----------
   useEffect(() => {
-    if (activeChapterKey === null) return;
-    setCurrentIndex((prev) => {
-      if (chapterQuestionCount === 0) return prev;
-      if (prev >= chapterStartIndex && prev <= chapterEndIndex) {
-        return prev;
-      }
-      return chapterStartIndex;
-    });
-  }, [activeChapterKey, chapterStartIndex, chapterEndIndex, chapterQuestionCount]);
-
-  useEffect(() => {
-    if (!questions.length) {
+    if (!totalQuestions) {
       setDraft("");
       draftRef.current = "";
       return;
     }
-    const safeIndex = sanitizeIndex(currentIndex, questions.length);
+    const safeIndex = sanitizeIndex(currentIndex, totalQuestions);
     const nextValue = getAnswer(safeIndex) ?? "";
     if (draftRef.current !== nextValue) {
       setDraft(nextValue);
       draftRef.current = nextValue;
     }
-  }, [currentIndex, answersVersion, getAnswer, questions.length]);
+  }, [currentIndex, answersVersion, getAnswer, totalQuestions]);
 
+  // ---------- Фокус в textarea при переключении главы/вопроса ----------
   useEffect(() => {
     if (activeChapterKey === null) return;
-    if (!textareaRef.current) return;
-    const element = textareaRef.current;
+    const el = textareaRef.current;
+    if (!el) return;
     requestAnimationFrame(() => {
-      element.focus();
-      const position = element.value.length;
-      element.setSelectionRange(position, position);
+      el.focus();
+      const pos = el.value.length;
+      el.setSelectionRange(pos, pos);
     });
   }, [activeChapterKey, currentIndex]);
 
+  // ---------- Первичная позиция (resume/localStorage) без функций в deps ----------
   useEffect(() => {
     if (initialSelectionAppliedRef.current) return;
     if (!loaded || loading) return;
-    if (!chapterList.length) return;
-    if (!questions.length) {
+
+    if (!normalizedChapters.length || !totalQuestions) {
       initialSelectionAppliedRef.current = true;
       return;
     }
@@ -223,69 +256,61 @@ export default function QA() {
         );
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (
-            parsed &&
-            Number.isFinite(Number(parsed.index))
-          ) {
+          if (parsed && Number.isFinite(Number(parsed.index))) {
             storedIndex = Number(parsed.index);
           }
         }
-      } catch (_error) {
-        storedIndex = null;
-      }
+      } catch (_) {}
     }
 
     let targetIndex = storedIndex;
     if (targetIndex === null && Number.isFinite(resumeIndex)) {
       targetIndex = resumeIndex;
     }
-
     if (targetIndex === null) {
       initialSelectionAppliedRef.current = true;
       return;
     }
 
-    const safeIndex = sanitizeIndex(targetIndex, questions.length);
-    const chapterKey = findChapterKeyForIndex(safeIndex);
-    if (chapterKey === null) {
+    const safeIndex = sanitizeIndex(targetIndex, totalQuestions);
+    const chIdx = indexMap[safeIndex];
+    if (chIdx === -1) {
       initialSelectionAppliedRef.current = true;
       return;
     }
 
-    setActiveChapterKey(chapterKey);
+    setActiveChapterKey(normalizedChapters[chIdx].key);
     setCurrentIndex(safeIndex);
     initialSelectionAppliedRef.current = true;
   }, [
     loaded,
     loading,
-    chapterList,
-    questions.length,
+    normalizedChapters,
+    indexMap,
+    totalQuestions,
     resumeIndex,
-    findChapterKeyForIndex,
     user?.id,
   ]);
 
+  // ---------- Сохраняем «последнюю позицию» ----------
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!user?.id) return;
-    if (!questions.length) return;
+    if (!totalQuestions) return;
     if (activeChapterKey === null) return;
-    const safeIndex = sanitizeIndex(currentIndex, questions.length);
+    const safeIndex = sanitizeIndex(currentIndex, totalQuestions);
     try {
       window.localStorage.setItem(
         `fate:last-position:${user.id}`,
         JSON.stringify({ index: safeIndex })
       );
-    } catch (_error) {
-      // ignore write errors (storage full, disabled, etc.)
-    }
-  }, [user?.id, currentIndex, questions.length, activeChapterKey]);
+    } catch (_) {}
+  }, [user?.id, currentIndex, totalQuestions, activeChapterKey]);
 
+  // ---------- Тосты / автосохранение ----------
   const showToast = useCallback((message, tone = "info") => {
     setToast({ message, tone });
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-    }
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => {
       setToast(null);
       toastTimerRef.current = null;
@@ -294,9 +319,8 @@ export default function QA() {
 
   const markSaved = useCallback(() => {
     setAutoSaveState("saved");
-    if (autoSaveStateResetRef.current) {
+    if (autoSaveStateResetRef.current)
       clearTimeout(autoSaveStateResetRef.current);
-    }
     autoSaveStateResetRef.current = window.setTimeout(() => {
       setAutoSaveState("idle");
       autoSaveStateResetRef.current = null;
@@ -305,9 +329,7 @@ export default function QA() {
 
   const scheduleAutoSave = useCallback(
     (version) => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = window.setTimeout(async () => {
         autoSaveTimerRef.current = null;
         if (!dirtyRef.current) return;
@@ -320,8 +342,8 @@ export default function QA() {
           } else {
             setAutoSaveState("dirty");
           }
-        } catch (error) {
-          console.error("Failed to auto-save answers", error);
+        } catch (err) {
+          console.error("Failed to auto-save answers", err);
           setAutoSaveState("error");
         }
       }, AUTO_SAVE_DELAY);
@@ -329,39 +351,39 @@ export default function QA() {
     [saveAnswers, markSaved]
   );
 
+  // ---------- Хэндлеры ----------
   const handleOpenChapter = useCallback(
-    (chapter, index) => {
-      const key = chapterKeyFor(chapter, index);
-      const start = sanitizeIndex(chapter?.startIndex ?? 0, questions.length || 1);
+    (chapter, idx) => {
+      const key = chapterKeyFor(chapter, idx);
+      const start = sanitizeIndex(
+        chapter?.startIndex ?? 0,
+        totalQuestions || 1
+      );
       setActiveChapterKey(key);
       setCurrentIndex(start);
     },
-    [questions.length]
+    [totalQuestions]
   );
 
-  const handleBackToChapters = useCallback(() => {
-    setActiveChapterKey(null);
-  }, []);
+  const handleBackToChapters = useCallback(() => setActiveChapterKey(null), []);
 
-  const handlePrevQuestion = useCallback(() => {
-    setCurrentIndex((prev) =>
-      Math.max(prev - 1, chapterStartIndex)
-    );
-  }, [chapterStartIndex]);
+  const handlePrevQuestion = useCallback(
+    () => setCurrentIndex((prev) => Math.max(prev - 1, chapterStartIndex)),
+    [chapterStartIndex]
+  );
 
-  const handleNextQuestion = useCallback(() => {
-    setCurrentIndex((prev) =>
-      Math.min(prev + 1, chapterEndIndex)
-    );
-  }, [chapterEndIndex]);
+  const handleNextQuestion = useCallback(
+    () => setCurrentIndex((prev) => Math.min(prev + 1, chapterEndIndex)),
+    [chapterEndIndex]
+  );
 
   const handleInputChange = useCallback(
-    (event) => {
-      if (!questions.length) return;
-      const value = event.target.value;
+    (e) => {
+      if (!totalQuestions) return;
+      const value = e.target.value;
       setDraft(value);
       draftRef.current = value;
-      const safeIndex = sanitizeIndex(currentIndex, questions.length);
+      const safeIndex = sanitizeIndex(currentIndex, totalQuestions);
       updateAnswer(safeIndex, value);
       editVersionRef.current += 1;
       dirtyRef.current = true;
@@ -369,7 +391,7 @@ export default function QA() {
       setAutoSaveState((prev) => (prev === "saving" ? prev : "dirty"));
       scheduleAutoSave(version);
     },
-    [currentIndex, questions.length, updateAnswer, scheduleAutoSave]
+    [currentIndex, totalQuestions, updateAnswer, scheduleAutoSave]
   );
 
   const handleManualSave = useCallback(async () => {
@@ -411,9 +433,7 @@ export default function QA() {
       dirtyRef.current = false;
       markSaved();
       const updated = await refreshUser();
-      if (updated) {
-        setUser(updated);
-      }
+      if (updated) setUser(updated);
       showToast("Ответы отправлены редакции", "success");
       navigate("/complete", { replace: true });
     } catch (error) {
@@ -427,91 +447,23 @@ export default function QA() {
       setFinishBusy(false);
       setCompleteDialogOpen(false);
     }
-  }, [finishBusy, saveAnswers, refreshUser, setUser, navigate, showToast, markSaved]);
+  }, [
+    finishBusy,
+    saveAnswers,
+    refreshUser,
+    setUser,
+    navigate,
+    showToast,
+    markSaved,
+  ]);
 
-  const computeChapterCount = useCallback(
-    (chapter, index) => {
-      if (!chapter) return 0;
-      if (!questions.length) return 0;
-      const start = sanitizeIndex(chapter.startIndex ?? 0, questions.length || 1);
-      const declared = Number(chapter.questionCount ?? 0);
-      if (Number.isFinite(declared) && declared > 0) {
-        return Math.min(declared, Math.max(0, questions.length - start));
-      }
-      const nextChapter = chapterList[index + 1] ?? null;
-      if (nextChapter) {
-        const nextStart = sanitizeIndex(
-          nextChapter.startIndex ?? questions.length,
-          questions.length || 1
-        );
-        if (nextStart > start) {
-          return Math.min(nextStart - start, Math.max(0, questions.length - start));
-        }
-      }
-      return Math.max(0, questions.length - start);
-    },
-    [chapterList, questions.length]
-  );
-
-  const findChapterKeyForIndex = useCallback(
-    (index) => {
-      if (!chapterList.length || !questions.length) return null;
-      const safeIndex = sanitizeIndex(index, questions.length);
-      for (let idx = 0; idx < chapterList.length; idx += 1) {
-        const chapter = chapterList[idx];
-        const start = sanitizeIndex(chapter?.startIndex ?? 0, questions.length || 1);
-        const count = computeChapterCount(chapter, idx);
-        if (count <= 0) {
-          continue;
-        }
-        const end = start + count - 1;
-        if (safeIndex >= start && safeIndex <= end) {
-          return chapterKeyFor(chapter, idx);
-        }
-      }
-      const firstChapter = chapterList[0];
-      if (!firstChapter) return null;
-      const firstCount = computeChapterCount(firstChapter, 0);
-      if (firstCount <= 0) {
-        return null;
-      }
-      return chapterKeyFor(firstChapter, 0);
-    },
-    [chapterList, computeChapterCount, questions.length]
-  );
-
-  const formatChapterTitle = useCallback((chapter, index) => {
-    const baseTitle = `Глава ${index + 1}.`;
-    const raw =
-      typeof chapter?.title === "string" ? chapter.title.trim() : "";
-    return {
-      heading: baseTitle,
-      subtitle: raw.length ? raw : null,
-    };
-  }, []);
-
-  const renderAutoSaveStatus = () => {
-    switch (autoSaveState) {
-      case "saving":
-        return "Сохраняем черновик…";
-      case "dirty":
-        return "Есть несохранённые изменения.";
-      case "saved":
-        return "Черновик сохранён.";
-      case "error":
-        return "Автосохранение не удалось. Сохраните ответы вручную.";
-      default:
-        return null;
-    }
-  };
-
-  if (interviewLocked) {
-    return <Navigate to="/complete" replace />;
-  }
+  // ---------- Рендер ----------
+  if (interviewLocked) return <Navigate to="/complete" replace />;
 
   const isLoading = loading && !loaded;
-  const hasQuestions = questions.length > 0;
-  const showChapterSelection = !isLoading && hasQuestions && activeChapterKey === null;
+  const hasQuestions = totalQuestions > 0;
+  const showChapterSelection =
+    !isLoading && hasQuestions && activeChapterKey === null;
 
   let mainContent = null;
 
@@ -545,19 +497,19 @@ export default function QA() {
           </p>
         </div>
 
-        {chapterList.length === 0 ? (
+        {normalizedChapters.length === 0 ? (
           <div className="text-center text-muted">
             Главы ещё не сформированы. Как только редакция подготовит вопросы,
             они появятся здесь.
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {chapterList.map((chapter, index) => {
+            {normalizedChapters.map((chapter, index) => {
               const { heading, subtitle } = formatChapterTitle(chapter, index);
-              const questionCount = computeChapterCount(chapter, index);
+              const questionCount = chapterCount(chapter);
               return (
                 <div
-                  key={chapterKeyFor(chapter, index)}
+                  key={chapter.key}
                   className="paper px-4 py-5 flex flex-col gap-4 text-center"
                 >
                   <div className="space-y-1">
@@ -594,11 +546,12 @@ export default function QA() {
       </section>
     );
   } else {
-    const safeIndex = sanitizeIndex(currentIndex, questions.length);
+    const safeIndex = sanitizeIndex(currentIndex, totalQuestions);
     const currentQuestion =
       typeof questions[safeIndex] === "string"
         ? questions[safeIndex]
         : questions[safeIndex]?.text ?? "";
+
     const chapterNumber =
       activeChapterIndex >= 0 ? activeChapterIndex + 1 : safeIndex + 1;
     const { heading: chapterHeading, subtitle: chapterSubtitle } =
@@ -639,7 +592,8 @@ export default function QA() {
           <div className="border border-dashed border-line rounded-[16px] bg-[rgba(255,255,255,.65)] p-6 text-center space-y-2">
             <div className="font-semibold">В этой главе пока нет вопросов</div>
             <div className="text-muted text-sm">
-              Дождитесь, когда редакция добавит вопросы, или выберите другую главу.
+              Дождитесь, когда редакция добавит вопросы, или выберите другую
+              главу.
             </div>
           </div>
         ) : (
@@ -667,7 +621,15 @@ export default function QA() {
             />
 
             <div className="text-sm text-muted">
-              {renderAutoSaveStatus()}
+              {autoSaveState === "saving"
+                ? "Сохраняем черновик…"
+                : autoSaveState === "dirty"
+                ? "Есть несохранённые изменения."
+                : autoSaveState === "saved"
+                ? "Черновик сохранён."
+                : autoSaveState === "error"
+                ? "Автосохранение не удалось. Сохраните ответы вручную."
+                : null}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">

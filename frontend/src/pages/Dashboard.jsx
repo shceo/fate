@@ -4,7 +4,6 @@ import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
 import { useAuth } from "../shared/AuthContext.jsx";
 import { useQuestions } from "../shared/QuestionsContext.jsx";
-import { getOrderStatusLabel } from "../shared/orderStatus.js";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -14,17 +13,6 @@ export default function Dashboard() {
   const greeting = user?.name
     ? `Добро пожаловать, ${user.name}`
     : "Добро пожаловать";
-  const orderStatusLabel =
-    user?.statusLabel ?? getOrderStatusLabel(user?.status);
-  const orderedText = user?.ordered
-    ? "Заказ подтверждён"
-    : "Ожидает подтверждения";
-  const orderedDescription = user?.ordered
-    ? "Мы уже работаем над вашей книгой и будем обновлять статус по мере продвижения."
-    : "Подтвердите заказ, чтобы мы могли перейти к подготовке книги.";
-  const statusDescription = orderStatusLabel
-    ? "Следите за этапами проекта — статус обновляется автоматически."
-    : "Как только редакция начнёт работу, статус проекта появится здесь.";
   const hasQuestions = loaded && totalCount > 0;
   const questionsSummary =
     hasQuestions && !interviewLocked
@@ -45,40 +33,9 @@ export default function Dashboard() {
               {greeting}
             </h2>
             <p className="text-muted">
-              Здесь собрана основная информация о вашем проекте и статусе
-              заказа. При необходимости вы всегда можете перейти к заполнению
-              вопросов.
+              Здесь собрана основная информация о вашем проекте. При необходимости вы всегда можете перейти к заполнению вопросов.
             </p>
           </div>
-
-          <div className="space-y-3">
-            <div className="font-semibold">Статус заказа</div>
-            <div className="flex items-start gap-3 p-3 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
-              <span className="text-xl" aria-hidden="true">
-                📦
-              </span>
-              <div>
-                <div className="font-semibold">{orderedText}</div>
-                <div className="text-muted text-sm">{orderedDescription}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="font-semibold">Этап проекта</div>
-            <div className="flex items-start gap-3 p-3 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
-              <span className="text-xl" aria-hidden="true">
-                🛠️
-              </span>
-              <div>
-                <div className="font-semibold">
-                  {orderStatusLabel ?? "Статус ещё не назначен"}
-                </div>
-                <div className="text-muted text-sm">{statusDescription}</div>
-              </div>
-            </div>
-          </div>
-
           <div className="border-t border-dashed border-line pt-4">
             <div className="font-semibold mb-2">Обложка</div>
             <div className="flex items-center gap-2">
@@ -113,8 +70,7 @@ export default function Dashboard() {
           <div className="space-y-2">
             <h3 className="font-serif text-xl">Ваш проект</h3>
             <p className="text-muted">
-              Здесь отображаются актуальные данные по интервью и статусу
-              подготовки книги.
+              Здесь отображаются актуальные данные по интервью.
             </p>
           </div>
 
@@ -132,7 +88,7 @@ export default function Dashboard() {
                   <div className="font-semibold">Ответы отправлены редакции</div>
                   <div className="text-muted">
                     Мы изучим ваши материалы и свяжемся, если потребуются
-                    уточнения. Следите за статусом проекта в панели слева.
+                    уточнения. Следите за статусом проекта на итоговой странице.
                   </div>
                 </div>
               </div>
