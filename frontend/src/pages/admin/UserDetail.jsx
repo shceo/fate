@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import { useParams } from "react-router-dom";
-import { apiDelete, apiPost } from "../../shared/api.js";
+import { apiDelete, apiPost, apiPut } from "../../shared/api.js";
 import { useBodyScrollLock } from "../../shared/useBodyScrollLock.js";
 import { resolveCoverDisplay } from "../../shared/coverTemplates.js";
 
@@ -156,7 +156,14 @@ export default function UserDetail() {
   const [exportBusy, setExportBusy] = useState(false);
   const [exportError, setExportError] = useState(null);
 
-  useBodyScrollLock(questionsModalOpen);
+  const [editChapterModalOpen, setEditChapterModalOpen] = useState(false);
+  const [editingChapter, setEditingChapter] = useState(null);
+  const [editChapterTitle, setEditChapterTitle] = useState("");
+  const [editChapterQuestions, setEditChapterQuestions] = useState([]);
+  const [editChapterBusy, setEditChapterBusy] = useState(false);
+  const [editChapterError, setEditChapterError] = useState(null);
+
+  useBodyScrollLock(questionsModalOpen || editChapterModalOpen);
 
   const coverDisplay = useMemo(() => {
     const source = {
@@ -794,6 +801,94 @@ export default function UserDetail() {
     }
   }, [exportBusy, id, exportFileName, showQuestionsNotice]);
 
+  const openEditChapterModal = (chapter) => {
+    setEditingChapter(chapter);
+    setEditChapterTitle(chapter.title || "");
+    setEditChapterQuestions(
+      Array.isArray(chapter.questions) ? chapter.questions.map((q) => q.text) : []
+    );
+    setEditChapterError(null);
+    setEditChapterBusy(false);
+    setEditChapterModalOpen(true);
+  };
+
+  const closeEditChapterModal = () => {
+    setEditChapterModalOpen(false);
+    setEditingChapter(null);
+    setEditChapterTitle("");
+    setEditChapterQuestions([]);
+    setEditChapterError(null);
+  };
+
+  const handleEditChapterSubmit = async (event) => {
+    event.preventDefault();
+    if (!editingChapter) return;
+    if (editChapterBusy) return;
+
+    setEditChapterBusy(true);
+    setEditChapterError(null);
+
+    try {
+      await apiPut(`/api/admin/users/${id}/chapters/${editingChapter.id}`, {
+        title: editChapterTitle.trim() || null,
+        questions: editChapterQuestions.filter((q) => q && q.trim()),
+      });
+      await reload();
+      closeEditChapterModal();
+      showQuestionsNotice("Глава успешно обновлена.", "success");
+    } catch (error) {
+      console.error(error);
+      setEditChapterError(
+        error.message || "Не удалось обновить главу. Попробуйте ещё раз."
+      );
+    } finally {
+      setEditChapterBusy(false);
+    }
+  };
+
+  const updateEditChapterQuestion = (index, value) => {
+    setEditChapterQuestions((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const removeEditChapterQuestion = (index) => {
+    setEditChapterQuestions((prev) =>
+      prev.filter((_, position) => position !== index)
+    );
+  };
+
+  const addEditChapterQuestion = () => {
+    setEditChapterQuestions((prev) => [...prev, ""]);
+  };
+
+  const handleDeleteChapter = async (chapter) => {
+    const confirmed = window.confirm(
+      `Вы уверены, что хотите удалить главу "${formatChapterTitle(
+        chapter,
+        chapters.indexOf(chapter)
+      )}"? Все вопросы этой главы также будут удалены.`
+    );
+    if (!confirmed) return;
+
+    setQuestionsError(null);
+    try {
+      await apiDelete(`/api/admin/users/${id}/chapters/${chapter.id}`);
+      await reload();
+      showQuestionsNotice("Глава успешно удалена.", "success");
+    } catch (error) {
+      console.error(error);
+      const message =
+        error.code === "CANNOT_DELETE_LAST_CHAPTER"
+          ? "Невозможно удалить последнюю главу."
+          : error.message || "Не удалось удалить главу. Попробуйте ещё раз.";
+      setQuestionsError(message);
+      showQuestionsNotice(message, "error");
+    }
+  };
+
   if (!data) return null;
 
   const telegram = data.telegram || null;
@@ -1400,8 +1495,26 @@ export default function UserDetail() {
             {chapters.map((chapter, index) => (
               <div key={chapter.id} className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="font-serif text-lg">
-                    {formatChapterTitle(chapter, index)}
+                  <div className="flex items-center gap-2">
+                    <div className="font-serif text-lg">
+                      {formatChapterTitle(chapter, index)}
+                    </div>
+                    <button
+                      className="btn"
+                      onClick={() => openEditChapterModal(chapter)}
+                      title="Редактировать главу"
+                      style={{ padding: "4px 8px", fontSize: "0.875rem" }}
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => handleDeleteChapter(chapter)}
+                      title="Удалить главу"
+                      style={{ padding: "4px 8px", fontSize: "0.875rem" }}
+                    >
+                      🗑️
+                    </button>
                   </div>
                   <div className="text-muted text-sm">
                     Вопросов: {Array.isArray(chapter.questions) ? chapter.questions.length : 0}
@@ -1487,6 +1600,116 @@ export default function UserDetail() {
       </main>
 
       {questionsModal}
+
+      {editChapterModalOpen && editingChapter ? (
+        <div className="modal-backdrop">
+          <div className="modal-card w-[min(720px,96vw)] space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <h3 className="font-serif text-[1.6rem]">Редактировать главу</h3>
+                <div className="text-sm text-muted">
+                  Измените название главы и её вопросы.
+                </div>
+              </div>
+              <button className="btn icon-btn" onClick={closeEditChapterModal}>
+                X
+              </button>
+            </div>
+
+            <form className="space-y-4" onSubmit={handleEditChapterSubmit}>
+              <div className="paper p-4 space-y-3">
+                <label className="block">
+                  <span className="font-semibold mb-2 block">Название главы</span>
+                  <input
+                    className="input"
+                    placeholder="Введите название главы"
+                    value={editChapterTitle}
+                    onChange={(e) => setEditChapterTitle(e.target.value)}
+                    disabled={editChapterBusy}
+                  />
+                  <div className="text-sm text-muted mt-2">
+                    Оставьте пустым для автоматического названия.
+                  </div>
+                </label>
+              </div>
+
+              <div className="paper p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">
+                    Вопросы ({editChapterQuestions.filter(q => q && q.trim()).length})
+                  </span>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={addEditChapterQuestion}
+                    disabled={editChapterBusy}
+                  >
+                    Добавить вопрос
+                  </button>
+                </div>
+
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                  {editChapterQuestions.length === 0 ? (
+                    <div className="text-muted text-sm">
+                      Добавьте вопросы для этой главы.
+                    </div>
+                  ) : (
+                    editChapterQuestions.map((question, index) => (
+                      <div
+                        key={`edit-chapter-q-${index}`}
+                        className="border border-line rounded-[12px] bg-white/70 p-3 space-y-2"
+                      >
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">Вопрос {index + 1}</span>
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => removeEditChapterQuestion(index)}
+                            disabled={editChapterBusy}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                        <textarea
+                          className="input min-h-[80px]"
+                          value={question}
+                          onChange={(e) =>
+                            updateEditChapterQuestion(index, e.target.value)
+                          }
+                          disabled={editChapterBusy}
+                          placeholder="Введите текст вопроса"
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {editChapterError ? (
+                <div className="text-sm text-[#b2563f]">{editChapterError}</div>
+              ) : null}
+
+              <div className="flex justify-end gap-2 modal-actions">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={closeEditChapterModal}
+                  disabled={editChapterBusy}
+                >
+                  Отмена
+                </button>
+                <button
+                  className="btn primary"
+                  type="submit"
+                  disabled={editChapterBusy}
+                >
+                  {editChapterBusy ? "Сохраняем..." : "Сохранить"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
     </>
   );
