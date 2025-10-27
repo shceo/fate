@@ -1861,6 +1861,147 @@ app.post(
   })
 );
 
+app.put(
+  '/api/admin/users/:id/chapters/:chapterId',
+  authRequired,
+  adminRequired,
+  csrfRequired,
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    const user = await fetchUserById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    const chapterId = Number.parseInt(req.params.chapterId, 10);
+    if (!Number.isInteger(chapterId)) {
+      return res.status(400).json({ error: 'INVALID_CHAPTER' });
+    }
+    const titleRaw = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+    const questions = normalizeQuestionsInput(req.body);
+
+    const result = await transaction(async (client) => {
+      await ensureUserChapters(user.id, client);
+      const chapterRes = await client.query(
+        `SELECT id, position, title
+         FROM user_question_chapters
+         WHERE id = $1
+           AND user_id = $2`,
+        [chapterId, user.id]
+      );
+      if (chapterRes.rowCount === 0) {
+        const err = new Error('CHAPTER_NOT_FOUND');
+        err.status = 404;
+        throw err;
+      }
+
+      await client.query(
+        `UPDATE user_question_chapters
+         SET title = $2
+         WHERE id = $1`,
+        [chapterId, titleRaw.length ? titleRaw : null]
+      );
+
+      if (questions.length > 0) {
+        await client.query(
+          `DELETE FROM user_questions
+           WHERE user_id = $1
+             AND chapter_id = $2`,
+          [user.id, chapterId]
+        );
+
+        for (let idx = 0; idx < questions.length; idx += 1) {
+          await client.query(
+            `INSERT INTO user_questions (user_id, chapter_id, position, chapter_position, text)
+             VALUES ($1, $2, 0, $3, $4)`,
+            [user.id, chapterId, idx, questions[idx]]
+          );
+        }
+      }
+
+      const total = await resequenceUserQuestions(user.id, client);
+      await pruneUserAnswers(user.id, total, client);
+
+      const updated = await client.query(
+        `SELECT id, position, title
+         FROM user_question_chapters
+         WHERE id = $1`,
+        [chapterId]
+      );
+
+      return updated.rows[0];
+    });
+
+    res.json({
+      id: result.id,
+      position: result.position,
+      title: result.title
+    });
+  })
+);
+
+app.delete(
+  '/api/admin/users/:id/chapters/:chapterId',
+  authRequired,
+  adminRequired,
+  csrfRequired,
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    const user = await fetchUserById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    const chapterId = Number.parseInt(req.params.chapterId, 10);
+    if (!Number.isInteger(chapterId)) {
+      return res.status(400).json({ error: 'INVALID_CHAPTER' });
+    }
+
+    await transaction(async (client) => {
+      const chapterRes = await client.query(
+        `SELECT id
+         FROM user_question_chapters
+         WHERE id = $1
+           AND user_id = $2`,
+        [chapterId, user.id]
+      );
+      if (chapterRes.rowCount === 0) {
+        const err = new Error('CHAPTER_NOT_FOUND');
+        err.status = 404;
+        throw err;
+      }
+
+      const chaptersCount = await client.query(
+        `SELECT COUNT(*)::int AS count
+         FROM user_question_chapters
+         WHERE user_id = $1`,
+        [user.id]
+      );
+      if (Number(chaptersCount.rows[0]?.count ?? 0) <= 1) {
+        const err = new Error('CANNOT_DELETE_LAST_CHAPTER');
+        err.status = 400;
+        throw err;
+      }
+
+      await client.query(
+        `DELETE FROM user_questions
+         WHERE user_id = $1
+           AND chapter_id = $2`,
+        [user.id, chapterId]
+      );
+
+      await client.query(
+        `DELETE FROM user_question_chapters
+         WHERE id = $1`,
+        [chapterId]
+      );
+
+      const total = await resequenceUserQuestions(user.id, client);
+      await pruneUserAnswers(user.id, total, client);
+    });
+
+    res.json({ ok: true });
+  })
+);
+
 app.get(
   '/api/admin/users/:id/questions',
   authRequired,
