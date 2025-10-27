@@ -9,6 +9,7 @@ import { useParams } from "react-router-dom";
 import { apiDelete, apiPost, apiPut } from "../../shared/api.js";
 import { useBodyScrollLock } from "../../shared/useBodyScrollLock.js";
 import { resolveCoverDisplay } from "../../shared/coverTemplates.js";
+import ConfirmDialog from "../../components/ConfirmDialog.jsx";
 
 function sanitizeQuestions(source) {
   return (Array.isArray(source) ? source : [])
@@ -162,6 +163,10 @@ export default function UserDetail() {
   const [editChapterQuestions, setEditChapterQuestions] = useState([]);
   const [editChapterBusy, setEditChapterBusy] = useState(false);
   const [editChapterError, setEditChapterError] = useState(null);
+
+  const [deleteChapterConfirmOpen, setDeleteChapterConfirmOpen] = useState(false);
+  const [chapterToDelete, setChapterToDelete] = useState(null);
+  const [deleteChapterBusy, setDeleteChapterBusy] = useState(false);
 
   useBodyScrollLock(questionsModalOpen || editChapterModalOpen);
 
@@ -864,20 +869,21 @@ export default function UserDetail() {
     setEditChapterQuestions((prev) => [...prev, ""]);
   };
 
-  const handleDeleteChapter = async (chapter) => {
-    const confirmed = window.confirm(
-      `Вы уверены, что хотите удалить главу "${formatChapterTitle(
-        chapter,
-        chapters.indexOf(chapter)
-      )}"? Все вопросы этой главы также будут удалены.`
-    );
-    if (!confirmed) return;
+  const handleDeleteChapter = (chapter) => {
+    setChapterToDelete(chapter);
+    setDeleteChapterConfirmOpen(true);
+  };
 
+  const confirmDeleteChapter = async () => {
+    if (!chapterToDelete) return;
+    setDeleteChapterBusy(true);
     setQuestionsError(null);
     try {
-      await apiDelete(`/api/admin/users/${id}/chapters/${chapter.id}`);
+      await apiDelete(`/api/admin/users/${id}/chapters/${chapterToDelete.id}`);
       await reload();
       showQuestionsNotice("Глава успешно удалена.", "success");
+      setDeleteChapterConfirmOpen(false);
+      setChapterToDelete(null);
     } catch (error) {
       console.error(error);
       const message =
@@ -886,7 +892,14 @@ export default function UserDetail() {
           : error.message || "Не удалось удалить главу. Попробуйте ещё раз.";
       setQuestionsError(message);
       showQuestionsNotice(message, "error");
+    } finally {
+      setDeleteChapterBusy(false);
     }
+  };
+
+  const cancelDeleteChapter = () => {
+    setDeleteChapterConfirmOpen(false);
+    setChapterToDelete(null);
   };
 
   if (!data) return null;
@@ -1710,6 +1723,25 @@ export default function UserDetail() {
           </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={deleteChapterConfirmOpen}
+        title="Удалить главу?"
+        message={
+          chapterToDelete
+            ? `Вы уверены, что хотите удалить главу "${formatChapterTitle(
+                chapterToDelete,
+                chapters.indexOf(chapterToDelete)
+              )}"? Все вопросы этой главы также будут удалены.`
+            : ""
+        }
+        confirmLabel="Удалить"
+        cancelLabel="Отмена"
+        confirmTone="danger"
+        busy={deleteChapterBusy}
+        onConfirm={confirmDeleteChapter}
+        onCancel={cancelDeleteChapter}
+      />
     </div>
     </>
   );
