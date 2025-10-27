@@ -1,7 +1,8 @@
-﻿import React from "react";
+﻿import React, { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../../shared/AuthContext.jsx";
 import Logo from "../../components/Logo.jsx";
+import ConfirmDialog from "../../components/ConfirmDialog.jsx";
 
 function ClientsIcon() {
   return (
@@ -300,6 +301,12 @@ function NavItem({ to, end, icon, children }) {
 
 export default function AdminLayout() {
   const { logout } = useAuth();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    setShowLogoutConfirm(false);
+  };
 
   return (
     <div className="admin-layout min-h-screen bg-[radial-gradient(90rem_60rem_at_-10%_-10%,#F1E6D6_0%,transparent_60%),_radial-gradient(80rem_60rem_at_110%_10%,#F7EDE4_0%,transparent_55%),_#F5EFE6]">
@@ -321,7 +328,7 @@ export default function AdminLayout() {
             </NavItem>
           </nav>
           <hr className="hairline admin-nav__divider" />
-          <button className="btn w-full admin-nav__logout" onClick={logout}>
+          <button className="btn w-full admin-nav__logout" onClick={() => setShowLogoutConfirm(true)}>
             Выйти
           </button>
         </aside>
@@ -330,6 +337,16 @@ export default function AdminLayout() {
           <Outlet />
         </main>
       </div>
+
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        title="Выйти из аккаунта?"
+        message="После выхода нужно будет снова войти, чтобы продолжить работу в админ панели."
+        confirmLabel="Выйти"
+        cancelLabel="Отмена"
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </div>
   );
 }
