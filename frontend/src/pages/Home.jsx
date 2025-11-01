@@ -50,13 +50,33 @@ export default function Home() {
             </div>
         </div>
           <div className="grid place-items-center">
-            <div className="relative w-[min(88vw,340px)] h-[min(120vw,460px)] rounded-[18px] overflow-hidden shadow-[0_30px_60px_rgba(80,60,40,.18),0_10px_20px_rgba(80,60,40,.12)]">
-              <img
-                src={mainCoverImage}
-                alt="Пример печатной обложки Fate"
-                className="absolute inset-0 h-full w-full object-cover"
-                loading="eager"
-              />
+            <div className="cover cover-page relative w-[min(88vw,340px)] h-[min(120vw,460px)]" style={{ perspective: '1200px' }}>
+              <div className="cover-outer" style={{
+                position: 'relative',
+                width: '100%',
+                height: '100%',
+                borderRadius: '14px',
+                transformStyle: 'preserve-3d',
+                boxShadow: '0 30px 60px rgba(80,60,40,.18), 0 10px 20px rgba(80,60,40,.12)',
+                background: 'var(--paper)'
+              }}>
+                <div className="cover-face cover-front" style={{
+                  position: 'absolute',
+                  inset: '0',
+                  borderRadius: 'inherit',
+                  overflow: 'hidden',
+                  backfaceVisibility: 'hidden'
+                }}>
+                  <img
+                    src={mainCoverImage}
+                    alt="Пример печатной обложки Fate"
+                    className="h-full w-full object-cover"
+                    loading="eager"
+                  />
+                </div>
+                <span className="cover-spine" aria-hidden="true" />
+                <span className="cover-edge" aria-hidden="true" />
+              </div>
             </div>
           </div>
         </div>

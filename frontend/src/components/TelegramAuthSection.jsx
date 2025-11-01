@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TelegramLoginButton from "./TelegramLoginButton.jsx";
 import { useAuth } from "../shared/AuthContext.jsx";
+import tgLogo from "../assets/tg.png";
 
 export default function TelegramAuthSection() {
   const botUsername = import.meta.env.VITE_TG_BOT_USERNAME;
@@ -157,7 +158,14 @@ export default function TelegramAuthSection() {
         </>
       )} */}
       <button type="button" className="btn w-full justify-center" onClick={startBotFlow} disabled={loading}>
-        {loading ? "Ждём подтверждения..." : "Открыть бота для входа"}
+        {loading ? (
+          "Ждём подтверждения..."
+        ) : (
+          <span className="flex items-center gap-2">
+            <img src={tgLogo} alt="Telegram" className="w-5 h-5" />
+            Авторизоваться через телеграмм
+          </span>
+        )}
       </button>
       {status && <div className="text-sm text-muted text-center">{status}</div>}
       {error && <div className="text-sm text-red-600 text-center">{error}</div>}
