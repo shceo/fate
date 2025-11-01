@@ -38,7 +38,7 @@ export default function Home() {
             <p className="text-muted max-w-[55ch] mt-4">
               Fate помогает собирать сообщения, фотографии и моменты от близких
               и бережно превращает их в красивую книгу архивного качества —
-              интимный подарок на всю жизнь.
+              индивидуальный подарок на всю жизнь.
             </p>
             <div className="mt-6 flex gap-3 flex-wrap">
               <Link className="btn primary" to="/register">
