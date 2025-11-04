@@ -40,7 +40,7 @@ export default function Dashboard() {
       <section className="container mx-auto px-4 mt-4 grid gap-4 md:grid-cols-[280px_1fr] items-start">
         <aside className="paper p-4 space-y-4">
           <div>
-            <h2 className="font-serif text-[clamp(1.4rem,3.2vw,2rem)]">
+            <h2 className="font-serif text-[clamp(1.4rem,3.2vw,2rem)] text-ink">
               {greeting}
             </h2>
             <p className="text-muted">
@@ -109,12 +109,12 @@ export default function Dashboard() {
             </div>
           ) : interviewLocked ? (
             <div className="space-y-4">
-              <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
+              <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)] dark:bg-[rgba(45,42,38,.65)]">
                 <span className="text-xl" aria-hidden="true">
                   ✅
                 </span>
                 <div>
-                  <div className="font-semibold">Ответы отправлены редакции</div>
+                  <div className="font-semibold text-ink">Ответы отправлены редакции</div>
                   <div className="text-muted">
                     Мы изучим ваши материалы и свяжемся, если потребуются
                     уточнения. Следите за статусом проекта на итоговой странице.
@@ -127,7 +127,7 @@ export default function Dashboard() {
             </div>
           ) : showQuestionsButton ? (
             <div className="space-y-4">
-              <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
+              <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)] dark:bg-[rgba(45,42,38,.65)]">
                 <span className="text-xl" aria-hidden="true">
                   ✍️
                 </span>
@@ -154,12 +154,12 @@ export default function Dashboard() {
               </button>
             </div>
           ) : (
-            <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
+            <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)] dark:bg-[rgba(45,42,38,.65)]">
               <span className="text-xl" aria-hidden="true">
                 ⏳
               </span>
               <div>
-                <div className="font-semibold">Вопросы ещё не назначены</div>
+                <div className="font-semibold text-ink">Вопросы ещё не назначены</div>
                 <div className="text-muted">
                   Как только редакция подготовит список вопросов, мы отправим
                   уведомление и вы сможете перейти к заполнению.

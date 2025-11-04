@@ -314,7 +314,7 @@ export default function AdminLayout() {
         <aside className="admin-nav paper p-4 h-min sticky top-6">
           <div className="admin-nav__header flex flex-col gap-2 mb-3">
             <Logo className="h-10 max-w-[50px]" />
-            <div className="font-serif text-[1.2rem]">Админка</div>
+            <div className="font-serif text-[1.2rem] text-ink">Админка</div>
           </div>
           <nav className="admin-nav__list space-y-2">
             <NavItem to="/admin" end icon={navIcons.clients}>

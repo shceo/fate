@@ -32,7 +32,7 @@ export default function Home() {
             <div className="uppercase tracking-[.18em] text-sm text-muted">
               Книга о вашей жизни
             </div>
-            <h1 className="font-serif font-semibold text-[clamp(2.1rem,4.4vw,3.4rem)] leading-tight mt-2">
+            <h1 className="font-serif font-semibold text-[clamp(2.1rem,4.4vw,3.4rem)] leading-tight mt-2 text-ink">
               Собирайте воспоминания и превращайте их в книгу.
             </h1>
             <p className="text-muted max-w-[55ch] mt-4">
@@ -83,7 +83,7 @@ export default function Home() {
       </section>
       <section id="how" className="py-12">
         <div className="container mx-auto px-4">
-          <h2 className="font-serif font-semibold text-[clamp(1.6rem,3vw,2.1rem)] mb-2">
+          <h2 className="font-serif font-semibold text-[clamp(1.6rem,3vw,2.1rem)] mb-2 text-ink">
             Как работает Fate
           </h2>
           <p className="text-muted max-w-[60ch]">

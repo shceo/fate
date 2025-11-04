@@ -381,7 +381,7 @@ export default function Templates() {
         <div className="modal-backdrop">
           <div className="modal-card w-[min(680px,92vw)] space-y-4">
             <div className="flex items-start justify-between gap-3">
-              <h3 className="font-serif text-[1.6rem]">
+              <h3 className="font-serif text-[1.6rem] text-ink">
                 Редактирование шаблона
               </h3>
               <button className="btn icon-btn" onClick={closeEditModal}>

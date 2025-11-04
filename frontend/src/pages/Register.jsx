@@ -35,7 +35,7 @@ export default function Register() {
               <Logo className="h-16 max-w-[240px]" />
             </div>
           </div>
-          <h1 className="font-serif text-[clamp(1.6rem,3vw,2.2rem)]">
+          <h1 className="font-serif text-[clamp(1.6rem,3vw,2.2rem)] text-ink">
             Создайте профиль Fate
           </h1>
           <p className="text-muted">

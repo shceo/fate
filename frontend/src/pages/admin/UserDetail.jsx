@@ -964,7 +964,7 @@ export default function UserDetail() {
           <div className="modal-card w-[min(860px,96vw)] space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
-                <h3 className="font-serif text-[1.6rem]">Управление вопросами</h3>
+                <h3 className="font-serif text-[1.6rem] text-ink">Управление вопросами</h3>
                 <div className="text-sm text-muted">{modeHint}</div>
                 {questionsModalOpen && questionsNotice ? (
                   <div
@@ -1619,7 +1619,7 @@ export default function UserDetail() {
           <div className="modal-card w-[min(720px,96vw)] space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
-                <h3 className="font-serif text-[1.6rem]">Редактировать главу</h3>
+                <h3 className="font-serif text-[1.6rem] text-ink">Редактировать главу</h3>
                 <div className="text-sm text-muted">
                   Измените название главы и её вопросы.
                 </div>

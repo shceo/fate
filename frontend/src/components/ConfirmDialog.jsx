@@ -39,7 +39,7 @@ export default function ConfirmDialog({
   return (
     <div className="modal-backdrop">
       <div className="modal-card">
-        {title && <h3 className="font-serif text-[1.4rem]">{title}</h3>}
+        {title && <h3 className="font-serif text-[1.4rem] text-ink">{title}</h3>}
         {renderMessage()}
         <div className="flex justify-end gap-2 mt-4 modal-actions">
           {showCancel && (
