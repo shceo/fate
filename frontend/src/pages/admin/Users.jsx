@@ -3,42 +3,7 @@ import { Link } from "react-router-dom";
 import ConfirmDialog from "../../components/ConfirmDialog.jsx";
 import { useAuth } from "../../shared/AuthContext.jsx";
 import { apiDelete } from "../../shared/api.js";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-const TOTAL_DAYS = 14;
-
-function calculateDeadlineInfo(user) {
-  if (!user.interviewLocked || !user.latestAnswerCreatedAt) {
-    return null;
-  }
-
-  const answersSubmittedAt = new Date(user.latestAnswerCreatedAt);
-  if (Number.isNaN(answersSubmittedAt.getTime())) {
-    return null;
-  }
-
-  const now = new Date();
-  const diff = now.getTime() - answersSubmittedAt.getTime();
-  const elapsedDays = diff > 0 ? Math.floor(diff / DAY_MS) : 0;
-  const remainingDays = Math.max(0, TOTAL_DAYS - elapsedDays);
-  const deadlineDate = new Date(answersSubmittedAt.getTime() + TOTAL_DAYS * DAY_MS);
-  const overdue = now > deadlineDate;
-
-  let tone = "green";
-  if (elapsedDays >= 10 || overdue) {
-    tone = "red";
-  } else if (elapsedDays >= 4) {
-    tone = "orange";
-  }
-
-  return {
-    elapsedDays,
-    remainingDays,
-    deadlineDate,
-    tone,
-    overdue,
-  };
-}
+import { calculateDeadlineInfo, TOTAL_DAYS } from "../../shared/deadlineUtils.js";
 
 function renderTelegram(tg) {
   if (!tg) {
@@ -108,8 +73,8 @@ export default function Users() {
 
     // Сортировка по оставшемуся времени (меньше времени - выше в списке)
     return filtered.sort((a, b) => {
-      const aDeadline = calculateDeadlineInfo(a);
-      const bDeadline = calculateDeadlineInfo(b);
+      const aDeadline = a.interviewLocked ? calculateDeadlineInfo(a.latestAnswerCreatedAt) : null;
+      const bDeadline = b.interviewLocked ? calculateDeadlineInfo(b.latestAnswerCreatedAt) : null;
 
       // Если у обоих нет дедлайна, сохраняем исходный порядок
       if (!aDeadline && !bDeadline) return 0;
@@ -216,7 +181,9 @@ export default function Users() {
             {filteredRows.map((user) => {
               const isSelf = currentUser?.id === user.id;
               const deleteDisabled = user.isAdmin || isSelf;
-              const deadlineInfo = calculateDeadlineInfo(user);
+              const deadlineInfo = user.interviewLocked
+                ? calculateDeadlineInfo(user.latestAnswerCreatedAt)
+                : null;
 
               return (
                 <tr key={user.id} className="border-t border-line">
