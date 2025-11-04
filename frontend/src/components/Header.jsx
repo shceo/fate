@@ -17,7 +17,7 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 backdrop-blur-md bg-[rgba(250,247,242,.75)] border-b border-line">
+    <header className="sticky top-0 z-40 backdrop-blur-md bg-[rgba(250,247,242,.75)] dark:bg-[rgba(37,34,32,.85)] border-b border-line">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between py-3">
           <Link to={homeLink} className="inline-flex items-center">

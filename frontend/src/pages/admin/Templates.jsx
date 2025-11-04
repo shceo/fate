@@ -37,8 +37,8 @@ function QuestionsPreview({ questions, total }) {
   const limited = questions.slice(0, PREVIEW_LIMIT);
   const showLimited = questions.length > PREVIEW_LIMIT;
   return (
-    <div className="border border-dashed border-line rounded-[12px] bg-white/70 p-3 space-y-2">
-      <div className="flex items-center justify-between text-xs uppercase tracking-wide text-[#7a6f64]">
+    <div className="border border-dashed border-line rounded-[12px] bg-white/70 dark:bg-[rgba(45,42,38,0.7)] p-3 space-y-2">
+      <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted">
         <span>Предпросмотр</span>
         <span>
           Вопросов: {questions.length}
@@ -298,7 +298,7 @@ export default function Templates() {
           </div>
 
           {createError ? (
-            <div className="text-sm text-[#b2563f]">{createError}</div>
+            <div className="text-sm text-red-700 dark:text-red-400">{createError}</div>
           ) : null}
 
           <button type="submit" className="btn primary" disabled={createBusy}>
@@ -315,7 +315,7 @@ export default function Templates() {
           </button>
         </div>
 
-        {loadError ? <div className="text-[#b2563f]">{loadError}</div> : null}
+        {loadError ? <div className="text-red-700 dark:text-red-400">{loadError}</div> : null}
 
         {loading ? (
           <div className="paper p-4 text-muted">Загрузка шаблонов...</div>
@@ -347,8 +347,8 @@ export default function Templates() {
                 </div>
 
                 {template.firstQuestion ? (
-                  <div className="border border-line rounded-[12px] bg-white/60 p-3">
-                    <div className="text-xs uppercase tracking-wide text-[#7a6f64]">
+                  <div className="border border-line rounded-[12px] bg-white/60 dark:bg-[rgba(45,42,38,0.6)] p-3">
+                    <div className="text-xs uppercase tracking-wide text-muted">
                       Первый вопрос
                     </div>
                     <div className="mt-1 whitespace-pre-wrap break-words text-sm">
@@ -450,7 +450,7 @@ export default function Templates() {
                 </div>
 
                 {editError ? (
-                  <div className="text-sm text-[#b2563f]">{editError}</div>
+                  <div className="text-sm text-red-700 dark:text-red-400">{editError}</div>
                 ) : null}
 
                 <div className="flex items-center justify-end gap-2">

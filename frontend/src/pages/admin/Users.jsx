@@ -129,7 +129,7 @@ export default function Users() {
       </p>
       <p>Будут стерты ответы, вопросы и связанные данные пользователя.</p>
       {deleteError && (
-        <p className="text-sm text-[#b23a2f]">{deleteError}</p>
+        <p className="text-sm text-red-700 dark:text-red-400">{deleteError}</p>
       )}
     </div>
   ) : null;
@@ -150,7 +150,7 @@ export default function Users() {
       </div>
       <div className="overflow-auto">
         <table className="w-full border border-line rounded-[14px] overflow-hidden">
-          <thead className="bg-[#fffaf2] text-[#6f6457]">
+          <thead className="bg-[#fffaf2] dark:bg-[#2a2623] text-muted">
             <tr>
               <th className="w-[64px] text-left p-3" aria-label="Действия" />
               <th className="text-left p-3">Имя</th>
