@@ -10,7 +10,6 @@ import { apiDelete, apiPost, apiPut } from "../../shared/api.js";
 import { useBodyScrollLock } from "../../shared/useBodyScrollLock.js";
 import { resolveCoverDisplay } from "../../shared/coverTemplates.js";
 import ConfirmDialog from "../../components/ConfirmDialog.jsx";
-import { calculateDeadlineInfo, findLatestAnswerDate } from "../../shared/deadlineUtils.js";
 
 function sanitizeQuestions(source) {
   return (Array.isArray(source) ? source : [])
@@ -29,6 +28,8 @@ const STATUS_OPTIONS = [
 ];
 
 const STATUS_NOTICE_DURATION = 4000;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const deadlineDateFormatter = new Intl.DateTimeFormat("ru-RU", {
   day: "2-digit",
@@ -376,11 +377,51 @@ export default function UserDetail() {
   }, [chapters]);
 
   const answersSubmittedAt = useMemo(() => {
-    return findLatestAnswerDate(data?.answers, data?.interviewLocked);
+    if (!data?.interviewLocked) return null;
+    if (!Array.isArray(data?.answers) || data.answers.length === 0) return null;
+    let latest = null;
+    for (const entry of data.answers) {
+      if (!entry || !entry.createdAt) continue;
+      const stamp = new Date(entry.createdAt);
+      if (Number.isNaN(stamp.getTime())) continue;
+      if (!latest || stamp > latest) {
+        latest = stamp;
+      }
+    }
+    return latest;
   }, [data?.answers, data?.interviewLocked]);
 
   const answerDeadlineInfo = useMemo(() => {
-    return calculateDeadlineInfo(answersSubmittedAt);
+    if (!answersSubmittedAt) return null;
+    const totalDays = 14;
+    const now = new Date();
+    const diff = now.getTime() - answersSubmittedAt.getTime();
+    const elapsedDays = diff > 0 ? Math.floor(diff / DAY_MS) : 0;
+    const remainingDays = Math.max(0, totalDays - elapsedDays);
+    const deadlineDate = new Date(answersSubmittedAt.getTime() + totalDays * DAY_MS);
+    const overdue = now > deadlineDate;
+    const overdueDays = overdue
+      ? Math.max(
+          0,
+          Math.floor((now.getTime() - deadlineDate.getTime()) / DAY_MS)
+        )
+      : 0;
+    let tone = "green";
+    if (elapsedDays >= 10 || overdue) {
+      tone = "red";
+    } else if (elapsedDays >= 4) {
+      tone = "orange";
+    }
+    return {
+      now,
+      elapsedDays,
+      remainingDays,
+      deadlineDate,
+      tone,
+      totalDays,
+      overdue,
+      overdueDays,
+    };
   }, [answersSubmittedAt]);
 
   const answerLookup = useMemo(() => {

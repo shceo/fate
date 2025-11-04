@@ -1818,12 +1818,10 @@ app.get(
          u.telegram_phone,
          u.created_at,
          COALESCE(a.answers_count, 0) AS answers_count,
-         COALESCE(q.questions_count, 0) AS questions_count,
-         a.latest_answer_created_at
+         COALESCE(q.questions_count, 0) AS questions_count
        FROM app_users u
        LEFT JOIN LATERAL (
-         SELECT COUNT(*)::int AS answers_count,
-                MAX(created_at) AS latest_answer_created_at
+         SELECT COUNT(*)::int AS answers_count
          FROM answers
          WHERE user_id = u.id
        ) a ON TRUE
@@ -1838,8 +1836,7 @@ app.get(
       rows.map((row) => ({
         ...presentUser(row),
         answersCount: Number(row.answers_count ?? 0),
-        questionsCount: Number(row.questions_count ?? 0),
-        latestAnswerCreatedAt: row.latest_answer_created_at ?? null
+        questionsCount: Number(row.questions_count ?? 0)
       }))
     );
   })
