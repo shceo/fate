@@ -4,6 +4,42 @@ import ConfirmDialog from "../../components/ConfirmDialog.jsx";
 import { useAuth } from "../../shared/AuthContext.jsx";
 import { apiDelete } from "../../shared/api.js";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TOTAL_DAYS = 14;
+
+function calculateDeadlineInfo(user) {
+  if (!user.interviewLocked || !user.latestAnswerCreatedAt) {
+    return null;
+  }
+
+  const answersSubmittedAt = new Date(user.latestAnswerCreatedAt);
+  if (Number.isNaN(answersSubmittedAt.getTime())) {
+    return null;
+  }
+
+  const now = new Date();
+  const diff = now.getTime() - answersSubmittedAt.getTime();
+  const elapsedDays = diff > 0 ? Math.floor(diff / DAY_MS) : 0;
+  const remainingDays = Math.max(0, TOTAL_DAYS - elapsedDays);
+  const deadlineDate = new Date(answersSubmittedAt.getTime() + TOTAL_DAYS * DAY_MS);
+  const overdue = now > deadlineDate;
+
+  let tone = "green";
+  if (elapsedDays >= 10 || overdue) {
+    tone = "red";
+  } else if (elapsedDays >= 4) {
+    tone = "orange";
+  }
+
+  return {
+    elapsedDays,
+    remainingDays,
+    deadlineDate,
+    tone,
+    overdue,
+  };
+}
+
 function renderTelegram(tg) {
   if (!tg) {
     return <span className="text-muted text-sm">не подключен</span>;
@@ -66,10 +102,25 @@ export default function Users() {
 
   const filteredRows = useMemo(() => {
     const value = query.trim().toLowerCase();
-    if (!value) {
-      return rows;
-    }
-    return rows.filter((row) => buildSearchString(row).includes(value));
+    let filtered = value
+      ? rows.filter((row) => buildSearchString(row).includes(value))
+      : rows;
+
+    // Сортировка по оставшемуся времени (меньше времени - выше в списке)
+    return filtered.sort((a, b) => {
+      const aDeadline = calculateDeadlineInfo(a);
+      const bDeadline = calculateDeadlineInfo(b);
+
+      // Если у обоих нет дедлайна, сохраняем исходный порядок
+      if (!aDeadline && !bDeadline) return 0;
+
+      // Пользователи с дедлайном идут выше тех, у кого его нет
+      if (!aDeadline) return 1;
+      if (!bDeadline) return -1;
+
+      // Сортировка по remainingDays (меньше - выше)
+      return aDeadline.remainingDays - bDeadline.remainingDays;
+    });
   }, [rows, query]);
 
   const summary = query.trim().length
@@ -165,23 +216,43 @@ export default function Users() {
             {filteredRows.map((user) => {
               const isSelf = currentUser?.id === user.id;
               const deleteDisabled = user.isAdmin || isSelf;
+              const deadlineInfo = calculateDeadlineInfo(user);
+
               return (
                 <tr key={user.id} className="border-t border-line">
                   <td className="p-3">
-                    <button
-                      type="button"
-                      className="btn icon-btn danger"
-                      onClick={() => openDeleteDialog(user)}
-                      disabled={deleteDisabled}
-                      title={
-                        deleteDisabled
-                          ? "Удаление недоступно для этого аккаунта"
-                          : "Удалить аккаунт"
-                      }
-                      aria-label={`Удалить ${user.name || "пользователя"}`}
-                    >
-                      🗑️
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn icon-btn danger"
+                        onClick={() => openDeleteDialog(user)}
+                        disabled={deleteDisabled}
+                        title={
+                          deleteDisabled
+                            ? "Удаление недоступно для этого аккаунта"
+                            : "Удалить аккаунт"
+                        }
+                        aria-label={`Удалить ${user.name || "пользователя"}`}
+                      >
+                        🗑️
+                      </button>
+                      {deadlineInfo && (
+                        <div
+                          className={`w-3 h-3 rounded-full ${
+                            deadlineInfo.tone === "green"
+                              ? "bg-green-500"
+                              : deadlineInfo.tone === "orange"
+                              ? "bg-orange-500"
+                              : "bg-red-500"
+                          }`}
+                          title={
+                            deadlineInfo.overdue
+                              ? `Срок истёк (прошло ${deadlineInfo.elapsedDays} дней)`
+                              : `Осталось ${deadlineInfo.remainingDays} дней из ${TOTAL_DAYS}`
+                          }
+                        />
+                      )}
+                    </div>
                   </td>
                   <td className="p-3">{user.name}</td>
                   <td className="p-3 break-all">{user.email}</td>
