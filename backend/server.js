@@ -519,6 +519,86 @@ async function fetchUserByTelegramId(telegramId) {
   return rows[0] ?? null;
 }
 
+async function ensureTemplateChapters(templateId, client) {
+  const run = getQueryRunner(client);
+
+  let existing = await run(
+    `SELECT id, position, title
+     FROM question_template_chapters
+     WHERE template_id = $1
+     ORDER BY position ASC`,
+    [templateId]
+  );
+
+  if (existing.rows.length === 0) {
+    const inserted = await run(
+      `INSERT INTO question_template_chapters (template_id, position, title)
+       VALUES ($1, 0, NULL)
+       RETURNING id, position, title`,
+      [templateId]
+    );
+    existing = await run(
+      `SELECT id, position, title
+       FROM question_template_chapters
+       WHERE template_id = $1
+       ORDER BY position ASC`,
+      [templateId]
+    );
+  }
+
+  return existing.rows;
+}
+
+async function loadTemplateChapters(templateId, client) {
+  const run = getQueryRunner(client);
+  await ensureTemplateChapters(templateId, client);
+
+  const { rows } = await run(
+    `SELECT
+       c.id AS chapter_id,
+       c.position AS chapter_position,
+       c.title AS chapter_title,
+       q.id AS question_id,
+       q.text AS question_text,
+       q.position AS question_position,
+       q.chapter_position AS question_chapter_position
+     FROM question_template_chapters c
+     LEFT JOIN question_template_items q
+       ON q.chapter_id = c.id
+     WHERE c.template_id = $1
+     ORDER BY c.position ASC, q.chapter_position ASC, q.position ASC, q.id ASC`,
+    [templateId]
+  );
+
+  const chapters = [];
+  const chapterMap = new Map();
+
+  for (const row of rows) {
+    let chapter = chapterMap.get(row.chapter_id);
+    if (!chapter) {
+      chapter = {
+        id: row.chapter_id,
+        position: row.chapter_position ?? 0,
+        title: row.chapter_title ?? null,
+        questions: []
+      };
+      chapterMap.set(row.chapter_id, chapter);
+      chapters.push(chapter);
+    }
+    if (row.question_id) {
+      chapter.questions.push({
+        id: row.question_id,
+        text: row.question_text,
+        position: row.question_position ?? 0,
+        chapterPosition: row.question_chapter_position ?? chapter.questions.length
+      });
+    }
+  }
+
+  chapters.sort((a, b) => a.position - b.position);
+  return chapters;
+}
+
 async function fetchTemplateById(id) {
   const templateRes = await query(
     `SELECT id, title, description, created_at, updated_at
@@ -530,16 +610,20 @@ async function fetchTemplateById(id) {
   if (!template) {
     return null;
   }
-  const itemsRes = await query(
-    `SELECT text
-     FROM question_template_items
-     WHERE template_id = $1
-     ORDER BY position ASC`,
-    [id]
-  );
+
+  const chapters = await loadTemplateChapters(id);
+
+  const allQuestions = [];
+  for (const chapter of chapters) {
+    for (const question of chapter.questions) {
+      allQuestions.push(question.text);
+    }
+  }
+
   return {
     ...template,
-    questions: itemsRes.rows.map((row) => row.text)
+    questions: allQuestions,
+    chapters
   };
 }
 
@@ -780,6 +864,19 @@ function presentTemplate(row, questions) {
   };
   if (Array.isArray(list)) {
     payload.questions = list;
+  }
+  if (Array.isArray(row.chapters)) {
+    payload.chapters = row.chapters.map((chapter) => ({
+      id: chapter.id,
+      position: chapter.position,
+      title: chapter.title,
+      questions: chapter.questions.map((q) => ({
+        id: q.id,
+        text: q.text,
+        position: q.position,
+        chapterPosition: q.chapterPosition
+      }))
+    }));
   }
   return payload;
 }
@@ -1347,7 +1444,16 @@ app.get(
     if (!template) {
       return res.status(404).json({ error: 'NOT_FOUND' });
     }
-    res.json(presentTemplate(template, template.questions));
+    const presented = presentTemplate(template, template.questions);
+    if (template.chapters) {
+      presented.chapters = template.chapters.map((chapter) => ({
+        id: chapter.id,
+        position: chapter.position,
+        title: chapter.title,
+        questions: chapter.questions.map((q) => q.text)
+      }));
+    }
+    res.json(presented);
   })
 );
 
@@ -1359,34 +1465,109 @@ app.post(
   writeLimiter,
   asyncHandler(async (req, res) => {
     const payload = parseBody(templateUpsertSchema, req.body);
-    const questions = normalizeQuestionsInput(payload);
-    if (questions.length === 0) {
-      return res.status(400).json({
-        error: 'NO_QUESTIONS',
-        message: 'Template must include at least one question.'
-      });
-    }
     const description =
       typeof payload.description === 'string' && payload.description.length
         ? payload.description
         : null;
     const id = nanoid();
-    await transaction(async (client) => {
-      await client.query(
-        `INSERT INTO question_templates (id, title, description)
-         VALUES ($1, $2, $3)`,
-        [id, payload.title, description]
-      );
-      for (let idx = 0; idx < questions.length; idx += 1) {
-        await client.query(
-          `INSERT INTO question_template_items (template_id, position, text)
-           VALUES ($1, $2, $3)`,
-          [id, idx, questions[idx]]
-        );
+
+    const chapters = Array.isArray(req.body.chapters) ? req.body.chapters : [];
+
+    if (chapters.length === 0) {
+      const questions = normalizeQuestionsInput(payload);
+      if (questions.length === 0) {
+        return res.status(400).json({
+          error: 'NO_QUESTIONS',
+          message: 'Template must include at least one question.'
+        });
       }
-    });
+
+      await transaction(async (client) => {
+        await client.query(
+          `INSERT INTO question_templates (id, title, description)
+           VALUES ($1, $2, $3)`,
+          [id, payload.title, description]
+        );
+
+        const chapterRes = await client.query(
+          `INSERT INTO question_template_chapters (template_id, position, title)
+           VALUES ($1, 0, NULL)
+           RETURNING id`,
+          [id]
+        );
+        const chapterId = chapterRes.rows[0].id;
+
+        for (let idx = 0; idx < questions.length; idx += 1) {
+          await client.query(
+            `INSERT INTO question_template_items (template_id, chapter_id, position, chapter_position, text)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [id, chapterId, idx, idx, questions[idx]]
+          );
+        }
+      });
+    } else {
+      let hasQuestions = false;
+      for (const chapter of chapters) {
+        const chapterQuestions = Array.isArray(chapter.questions) ? chapter.questions : [];
+        if (chapterQuestions.length > 0) {
+          hasQuestions = true;
+          break;
+        }
+      }
+
+      if (!hasQuestions) {
+        return res.status(400).json({
+          error: 'NO_QUESTIONS',
+          message: 'Template must include at least one question.'
+        });
+      }
+
+      await transaction(async (client) => {
+        await client.query(
+          `INSERT INTO question_templates (id, title, description)
+           VALUES ($1, $2, $3)`,
+          [id, payload.title, description]
+        );
+
+        let globalPosition = 0;
+        for (let chapterIdx = 0; chapterIdx < chapters.length; chapterIdx += 1) {
+          const chapter = chapters[chapterIdx];
+          const chapterTitle = typeof chapter.title === 'string' ? chapter.title.trim() : null;
+          const chapterQuestions = Array.isArray(chapter.questions)
+            ? chapter.questions.filter((q) => typeof q === 'string' && q.trim().length > 0)
+            : [];
+
+          const chapterRes = await client.query(
+            `INSERT INTO question_template_chapters (template_id, position, title)
+             VALUES ($1, $2, $3)
+             RETURNING id`,
+            [id, chapterIdx, chapterTitle && chapterTitle.length > 0 ? chapterTitle : null]
+          );
+          const chapterId = chapterRes.rows[0].id;
+
+          for (let qIdx = 0; qIdx < chapterQuestions.length; qIdx += 1) {
+            await client.query(
+              `INSERT INTO question_template_items (template_id, chapter_id, position, chapter_position, text)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [id, chapterId, globalPosition, qIdx, chapterQuestions[qIdx]]
+            );
+            globalPosition += 1;
+          }
+        }
+      });
+    }
+
     const template = await fetchTemplateById(id);
-    res.status(201).json(presentTemplate(template, template.questions));
+    const presented = presentTemplate(template, template.questions);
+    if (template.chapters) {
+      presented.chapters = template.chapters.map((chapter) => ({
+        id: chapter.id,
+        position: chapter.position,
+        title: chapter.title,
+        questions: chapter.questions.map((q) => q.text)
+      }));
+    }
+    res.status(201).json(presented);
   })
 );
 
@@ -1398,13 +1579,6 @@ app.put(
   writeLimiter,
   asyncHandler(async (req, res) => {
     const payload = parseBody(templateUpsertSchema, req.body);
-    const questions = normalizeQuestionsInput(payload);
-    if (questions.length === 0) {
-      return res.status(400).json({
-        error: 'NO_QUESTIONS',
-        message: 'Template must include at least one question.'
-      });
-    }
     const existing = await fetchTemplateById(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'NOT_FOUND' });
@@ -1413,28 +1587,124 @@ app.put(
       typeof payload.description === 'string' && payload.description.length
         ? payload.description
         : null;
-    await transaction(async (client) => {
-      await client.query(
-        `UPDATE question_templates
-         SET title = $2,
-             description = $3,
-             updated_at = NOW()
-         WHERE id = $1`,
-        [existing.id, payload.title, description]
-      );
-      await client.query('DELETE FROM question_template_items WHERE template_id = $1', [
-        existing.id
-      ]);
-      for (let idx = 0; idx < questions.length; idx += 1) {
-        await client.query(
-          `INSERT INTO question_template_items (template_id, position, text)
-           VALUES ($1, $2, $3)`,
-          [existing.id, idx, questions[idx]]
-        );
+
+    const chapters = Array.isArray(req.body.chapters) ? req.body.chapters : [];
+
+    if (chapters.length === 0) {
+      const questions = normalizeQuestionsInput(payload);
+      if (questions.length === 0) {
+        return res.status(400).json({
+          error: 'NO_QUESTIONS',
+          message: 'Template must include at least one question.'
+        });
       }
-    });
+
+      await transaction(async (client) => {
+        await client.query(
+          `UPDATE question_templates
+           SET title = $2,
+               description = $3,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [existing.id, payload.title, description]
+        );
+
+        await client.query('DELETE FROM question_template_items WHERE template_id = $1', [
+          existing.id
+        ]);
+        await client.query('DELETE FROM question_template_chapters WHERE template_id = $1', [
+          existing.id
+        ]);
+
+        const chapterRes = await client.query(
+          `INSERT INTO question_template_chapters (template_id, position, title)
+           VALUES ($1, 0, NULL)
+           RETURNING id`,
+          [existing.id]
+        );
+        const chapterId = chapterRes.rows[0].id;
+
+        for (let idx = 0; idx < questions.length; idx += 1) {
+          await client.query(
+            `INSERT INTO question_template_items (template_id, chapter_id, position, chapter_position, text)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [existing.id, chapterId, idx, idx, questions[idx]]
+          );
+        }
+      });
+    } else {
+      let hasQuestions = false;
+      for (const chapter of chapters) {
+        const chapterQuestions = Array.isArray(chapter.questions) ? chapter.questions : [];
+        if (chapterQuestions.length > 0) {
+          hasQuestions = true;
+          break;
+        }
+      }
+
+      if (!hasQuestions) {
+        return res.status(400).json({
+          error: 'NO_QUESTIONS',
+          message: 'Template must include at least one question.'
+        });
+      }
+
+      await transaction(async (client) => {
+        await client.query(
+          `UPDATE question_templates
+           SET title = $2,
+               description = $3,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [existing.id, payload.title, description]
+        );
+
+        await client.query('DELETE FROM question_template_items WHERE template_id = $1', [
+          existing.id
+        ]);
+        await client.query('DELETE FROM question_template_chapters WHERE template_id = $1', [
+          existing.id
+        ]);
+
+        let globalPosition = 0;
+        for (let chapterIdx = 0; chapterIdx < chapters.length; chapterIdx += 1) {
+          const chapter = chapters[chapterIdx];
+          const chapterTitle = typeof chapter.title === 'string' ? chapter.title.trim() : null;
+          const chapterQuestions = Array.isArray(chapter.questions)
+            ? chapter.questions.filter((q) => typeof q === 'string' && q.trim().length > 0)
+            : [];
+
+          const chapterRes = await client.query(
+            `INSERT INTO question_template_chapters (template_id, position, title)
+             VALUES ($1, $2, $3)
+             RETURNING id`,
+            [existing.id, chapterIdx, chapterTitle && chapterTitle.length > 0 ? chapterTitle : null]
+          );
+          const chapterId = chapterRes.rows[0].id;
+
+          for (let qIdx = 0; qIdx < chapterQuestions.length; qIdx += 1) {
+            await client.query(
+              `INSERT INTO question_template_items (template_id, chapter_id, position, chapter_position, text)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [existing.id, chapterId, globalPosition, qIdx, chapterQuestions[qIdx]]
+            );
+            globalPosition += 1;
+          }
+        }
+      });
+    }
+
     const template = await fetchTemplateById(existing.id);
-    res.json(presentTemplate(template, template.questions));
+    const presented = presentTemplate(template, template.questions);
+    if (template.chapters) {
+      presented.chapters = template.chapters.map((chapter) => ({
+        id: chapter.id,
+        position: chapter.position,
+        title: chapter.title,
+        questions: chapter.questions.map((q) => q.text)
+      }));
+    }
+    res.json(presented);
   })
 );
 
@@ -1456,6 +1726,75 @@ app.delete(
   })
 );
 
+app.post(
+  '/api/admin/templates/:templateId/send/:userId',
+  authRequired,
+  adminRequired,
+  csrfRequired,
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    const templateId = req.params.templateId;
+    const userId = req.params.userId;
+
+    const user = await fetchUserById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'USER_NOT_FOUND' });
+    }
+
+    const template = await fetchTemplateById(templateId);
+    if (!template) {
+      return res.status(404).json({ error: 'TEMPLATE_NOT_FOUND' });
+    }
+
+    if (!template.chapters || template.chapters.length === 0) {
+      return res.status(400).json({ error: 'TEMPLATE_HAS_NO_CHAPTERS' });
+    }
+
+    await transaction(async (client) => {
+      await ensureUserChapters(userId, client);
+
+      const maxPosRes = await client.query(
+        `SELECT COALESCE(MAX(position), -1) AS max
+         FROM user_question_chapters
+         WHERE user_id = $1`,
+        [userId]
+      );
+      let chapterPosition = Number(maxPosRes.rows[0]?.max ?? -1) + 1;
+
+      for (const templateChapter of template.chapters) {
+        const chapterRes = await client.query(
+          `INSERT INTO user_question_chapters (user_id, position, title)
+           VALUES ($1, $2, $3)
+           RETURNING id`,
+          [userId, chapterPosition, templateChapter.title]
+        );
+        const newChapterId = chapterRes.rows[0].id;
+
+        for (let qIdx = 0; qIdx < templateChapter.questions.length; qIdx += 1) {
+          const question = templateChapter.questions[qIdx];
+          await client.query(
+            `INSERT INTO user_questions (user_id, chapter_id, position, chapter_position, text)
+             VALUES ($1, $2, 0, $3, $4)`,
+            [userId, newChapterId, qIdx, question.text]
+          );
+        }
+
+        chapterPosition += 1;
+      }
+
+      const total = await resequenceUserQuestions(userId, client);
+      await pruneUserAnswers(userId, total, client);
+    });
+
+    const structure = await loadUserQuestionMap(userId);
+
+    res.json({
+      ok: true,
+      totalQuestions: structure.totalQuestions,
+      chaptersAdded: template.chapters.length
+    });
+  })
+);
 
 app.get(
   '/api/admin/users',

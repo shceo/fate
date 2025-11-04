@@ -113,7 +113,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS app_users_telegram_id_key
   ON app_users (telegram_id)
   WHERE telegram_id IS NOT NULL;
 
--- Шаблоны вопросов (как было)
+-- Шаблоны вопросов
 CREATE TABLE IF NOT EXISTS question_templates (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -122,12 +122,29 @@ CREATE TABLE IF NOT EXISTS question_templates (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS question_template_items (
+-- Главы в шаблонах
+CREATE TABLE IF NOT EXISTS question_template_chapters (
   id BIGSERIAL PRIMARY KEY,
   template_id TEXT NOT NULL REFERENCES question_templates (id) ON DELETE CASCADE,
   position INTEGER NOT NULL,
+  title TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS question_template_chapters_template_position_key
+  ON question_template_chapters (template_id, position);
+
+-- Вопросы в шаблонах (теперь привязаны к главам)
+CREATE TABLE IF NOT EXISTS question_template_items (
+  id BIGSERIAL PRIMARY KEY,
+  template_id TEXT NOT NULL REFERENCES question_templates (id) ON DELETE CASCADE,
+  chapter_id BIGINT REFERENCES question_template_chapters (id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  chapter_position INTEGER NOT NULL,
   text TEXT NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS question_template_items_template_position_key
-  ON question_template_items (template_id, position);
+CREATE UNIQUE INDEX IF NOT EXISTS question_template_items_template_chapter_position_key
+  ON question_template_items (template_id, chapter_id, chapter_position);
+
+CREATE INDEX IF NOT EXISTS question_template_items_chapter_position_idx
+  ON question_template_items (chapter_id, chapter_position);
