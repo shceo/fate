@@ -56,7 +56,7 @@ export default function Login() {
                 autoComplete="current-password"
               />
             </div>
-            {err && <div className="text-red-600">{err}</div>}
+            {err && <div className="text-red-700 dark:text-red-400">{err}</div>}
             <div className="flex flex-col gap-2 pt-1">
               <button className="btn primary w-full justify-center" type="submit">
                 Войти
