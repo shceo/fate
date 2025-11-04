@@ -169,6 +169,7 @@ export default function Users() {
           <thead className="bg-[#fffaf2] dark:bg-[#2a2623] text-muted">
             <tr>
               <th className="w-[64px] text-left p-3" aria-label="Действия" />
+              <th className="w-[40px] text-left p-3" aria-label="Статус срока" />
               <th className="text-left p-3">Имя</th>
               <th className="text-left p-3">Email</th>
               <th className="text-left p-3">Telegram</th>
@@ -188,38 +189,38 @@ export default function Users() {
               return (
                 <tr key={user.id} className="border-t border-line">
                   <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        className="btn icon-btn danger"
-                        onClick={() => openDeleteDialog(user)}
-                        disabled={deleteDisabled}
+                    <button
+                      type="button"
+                      className="btn icon-btn danger"
+                      onClick={() => openDeleteDialog(user)}
+                      disabled={deleteDisabled}
+                      title={
+                        deleteDisabled
+                          ? "Удаление недоступно для этого аккаунта"
+                          : "Удалить аккаунт"
+                      }
+                      aria-label={`Удалить ${user.name || "пользователя"}`}
+                    >
+                      🗑️
+                    </button>
+                  </td>
+                  <td className="p-3">
+                    {deadlineInfo && (
+                      <div
+                        className={`w-3 h-3 rounded-full ${
+                          deadlineInfo.tone === "green"
+                            ? "bg-green-500"
+                            : deadlineInfo.tone === "orange"
+                            ? "bg-orange-500"
+                            : "bg-red-500"
+                        }`}
                         title={
-                          deleteDisabled
-                            ? "Удаление недоступно для этого аккаунта"
-                            : "Удалить аккаунт"
+                          deadlineInfo.overdue
+                            ? `Срок истёк (прошло ${deadlineInfo.elapsedDays} дней)`
+                            : `Осталось ${deadlineInfo.remainingDays} дней из ${TOTAL_DAYS}`
                         }
-                        aria-label={`Удалить ${user.name || "пользователя"}`}
-                      >
-                        🗑️
-                      </button>
-                      {deadlineInfo && (
-                        <div
-                          className={`w-3 h-3 rounded-full ${
-                            deadlineInfo.tone === "green"
-                              ? "bg-green-500"
-                              : deadlineInfo.tone === "orange"
-                              ? "bg-orange-500"
-                              : "bg-red-500"
-                          }`}
-                          title={
-                            deadlineInfo.overdue
-                              ? `Срок истёк (прошло ${deadlineInfo.elapsedDays} дней)`
-                              : `Осталось ${deadlineInfo.remainingDays} дней из ${TOTAL_DAYS}`
-                          }
-                        />
-                      )}
-                    </div>
+                      />
+                    )}
                   </td>
                   <td className="p-3">{user.name}</td>
                   <td className="p-3 break-all">{user.email}</td>
@@ -238,7 +239,7 @@ export default function Users() {
             })}
             {filteredRows.length === 0 && (
               <tr>
-                <td className="p-4 text-center text-muted" colSpan={7}>
+                <td className="p-4 text-center text-muted" colSpan={8}>
                   Пользователи не найдены. Попробуйте изменить условия поиска.
                 </td>
               </tr>
