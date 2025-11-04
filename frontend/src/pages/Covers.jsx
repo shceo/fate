@@ -29,7 +29,7 @@ export default function Covers() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [customFlip, setCustomFlip] = useState(false);
+  const [flippedCards, setFlippedCards] = useState({});
 
   useEffect(() => {
     setSelectedSlug(currentCover.slug);
@@ -47,23 +47,29 @@ export default function Covers() {
       : selectedTemplate.title;
   }, [selectedTemplate]);
 
-  const handlePick = async (option) => {
+  const handleCardClick = (slug) => {
     if (busy) return;
-    const isCustom = Boolean(option.isCustom);
-    setCustomFlip(isCustom);
+    setFlippedCards((prev) => ({
+      ...prev,
+      [slug]: !prev[slug],
+    }));
+    setSelectedSlug(slug);
+  };
+
+  const handleConfirmSelection = async () => {
+    if (busy || !selectedSlug) return;
     setBusy(true);
     setError("");
 
     try {
+      const option = COVER_TEMPLATES.find((t) => t.slug === selectedSlug);
+      if (!option) return;
+
       await apiPost("/api/cover", {
         slug: option.slug,
         label: option.title,
         subtitle: option.subtitle ?? null,
       });
-      setSelectedSlug(option.slug);
-      if (isCustom) {
-        await new Promise((resolve) => setTimeout(resolve, 2200));
-      }
       await refreshUser();
       setDialogOpen(true);
     } catch (err) {
@@ -76,12 +82,10 @@ export default function Covers() {
 
   const closeDialog = () => {
     if (busy) return;
-    setCustomFlip(false);
     setDialogOpen(false);
   };
 
   const goBack = () => {
-    setCustomFlip(false);
     setDialogOpen(false);
     if (typeof window !== "undefined" && window.history.length > 1) {
       navigate(-1);
@@ -128,25 +132,18 @@ export default function Covers() {
           {COVER_TEMPLATES.map((option) => {
             const isSelected = option.slug === selectedSlug;
             const isCustom = Boolean(option.isCustom);
-            const isFlipped = isCustom && customFlip;
+            const isFlipped = flippedCards[option.slug] || false;
 
             return (
-              <label
+              <div
                 key={option.slug}
-                className={`cover cover-card transition-transform duration-200 ${
+                className={`cover cover-card transition-transform duration-200 cursor-pointer ${
                   busy ? "pointer-events-none" : ""
                 } ${isSelected ? "ring-4 ring-[#d0b8a8]/80 ring-offset-2" : ""} ${
                   isCustom ? "cover-card--custom" : ""
                 } ${isFlipped ? "cover-card--flipped" : ""}`}
+                onClick={() => handleCardClick(option.slug)}
               >
-                <input
-                  type="radio"
-                  name="cover"
-                  className="cover-input absolute inset-0 opacity-0 cursor-pointer"
-                  onChange={() => handlePick(option)}
-                  disabled={busy}
-                  aria-label={`Выбрать обложку ${option.title}`}
-                />
                 <div className="cover-outer">
                   <div
                     className={`cover-face cover-front ${
@@ -168,7 +165,7 @@ export default function Covers() {
                   <div
                     className={`cover-face cover-back ${
                       isCustom ? `bg-gradient-to-br ${option.gradient}` : ""
-                    } ${isCustom ? "cover-face--center" : ""}`}
+                    } ${option.description ? "cover-face--center" : ""}`}
                     style={
                       option.image
                         ? {
@@ -179,9 +176,9 @@ export default function Covers() {
                         : undefined
                     }
                   >
-                    {!isCustom && <span className="tag">{option.title}</span>}
-                    <div className={`meta font-serif ${isCustom ? "meta--center" : ""}`}>
-                      {isCustom ? (
+                    {!option.description && <span className="tag">{option.title}</span>}
+                    <div className={`meta font-serif ${option.description ? "meta--center" : ""}`}>
+                      {option.description ? (
                         <span className="cover-copy">{option.description}</span>
                       ) : (
                         option.subtitle
@@ -191,9 +188,26 @@ export default function Covers() {
                   <span className="cover-spine" aria-hidden="true" />
                   <span className="cover-edge" aria-hidden="true" />
                 </div>
-              </label>
+              </div>
             );
           })}
+        </div>
+
+        <div className="flex gap-3 justify-center mt-8">
+          <button
+            className="btn"
+            onClick={goBack}
+            disabled={busy}
+          >
+            Назад
+          </button>
+          <button
+            className="btn primary"
+            onClick={handleConfirmSelection}
+            disabled={busy || !selectedSlug}
+          >
+            {busy ? "Сохраняем..." : "Выбрать дизайн"}
+          </button>
         </div>
       </section>
       <Footer />
