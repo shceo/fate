@@ -1,7 +1,8 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "../components/Header.jsx";
 import Footer from "../components/Footer.jsx";
+import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import { useAuth } from "../shared/AuthContext.jsx";
 import { useQuestions } from "../shared/QuestionsContext.jsx";
 import { resolveCoverDisplay } from "../shared/coverTemplates.js";
@@ -10,6 +11,8 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { loaded, loading, totalCount, answeredCount, interviewLocked } =
     useQuestions();
+  const navigate = useNavigate();
+  const [showQuestionDialog, setShowQuestionDialog] = useState(false);
 
   const greeting = user?.name
     ? `Добро пожаловать, ${user.name}`
@@ -143,9 +146,12 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
-              <Link className="btn primary" to="/qa">
+              <button
+                className="btn primary"
+                onClick={() => setShowQuestionDialog(true)}
+              >
                 Перейти к вопросам
-              </Link>
+              </button>
             </div>
           ) : (
             <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
@@ -165,6 +171,20 @@ export default function Dashboard() {
       </section>
 
       <Footer />
+
+      <ConfirmDialog
+        open={showQuestionDialog}
+        title="готовы поделиться кусочком себя?"
+        message="Отвечайте искренне и подробно — мы буквально превратим ваши слова в книгу.\nЧем глубже ответы, тем теплее получится результат."
+        confirmLabel="Я готов(а)"
+        cancelLabel="Не сейчас"
+        confirmTone="primary"
+        onConfirm={() => {
+          setShowQuestionDialog(false);
+          navigate("/qa");
+        }}
+        onCancel={() => setShowQuestionDialog(false)}
+      />
     </div>
   );
 }
