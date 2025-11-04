@@ -724,10 +724,10 @@ export default function QA() {
     <div
       className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-[16px] shadow-lg border ${
         toast.tone === "error"
-          ? "bg-[#fdecea] border-[#f3b8b5] text-[#8a2a21]"
+          ? "bg-red-50 dark:bg-red-950/60 border-red-300 dark:border-red-800 text-red-800 dark:text-red-200"
           : toast.tone === "success"
-          ? "bg-[#e7f6ee] border-[#b7ddc3] text-[#1f5c3d]"
-          : "bg-[rgba(255,255,255,.95)] border-line text-[#2b2a27]"
+          ? "bg-green-50 dark:bg-green-950/60 border-green-300 dark:border-green-800 text-green-800 dark:text-green-200"
+          : "bg-[rgba(255,255,255,.95)] dark:bg-[rgba(37,34,32,.95)] border-line text-ink"
       }`}
     >
       {toast.message}

@@ -102,7 +102,7 @@ export default function Covers() {
             {selectedLabel ? (
               <p>
                 Мы сохранили шаблон{" "}
-                <span className="font-medium text-[#5b5246]">{selectedLabel}</span>.
+                <span className="font-medium text-ink">{selectedLabel}</span>.
               </p>
             ) : null}
             <p>Вы всегда можете изменить выбор позже на этой странице.</p>
@@ -122,7 +122,7 @@ export default function Covers() {
 
       <section className="container mx-auto px-4 mt-4 space-y-4">
         {error && (
-          <div className="card-glass px-4 py-3 text-sm text-[#a23a2f]">{error}</div>
+          <div className="card-glass px-4 py-3 text-sm text-red-700 dark:text-red-400">{error}</div>
         )}
         <div className="grid gap-4 md:grid-cols-3">
           {COVER_TEMPLATES.map((option) => {

@@ -321,10 +321,10 @@ export default function UserDetail() {
     <div
       className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-[16px] shadow-lg border ${
         statusNotice.tone === "error"
-          ? "bg-[#fdecea] border-[#f3b8b5] text-[#8a2a21]"
+          ? "bg-red-50 dark:bg-red-950/60 border-red-300 dark:border-red-800 text-red-800 dark:text-red-200"
           : statusNotice.tone === "success"
-          ? "bg-[#e7f6ee] border-[#b7ddc3] text-[#1f5c3d]"
-          : "bg-[rgba(255,255,255,.95)] border-line text-[#2b2a27]"
+          ? "bg-green-50 dark:bg-green-950/60 border-green-300 dark:border-green-800 text-green-800 dark:text-green-200"
+          : "bg-[rgba(255,255,255,.95)] dark:bg-[rgba(37,34,32,.95)] border-line text-ink"
       }`}
     >
       {statusNotice.message}
@@ -916,13 +916,13 @@ export default function UserDetail() {
 
   const deadlineToneClass = answerDeadlineInfo
     ? answerDeadlineInfo.tone === "green"
-      ? "bg-[#dce6d5] border border-[#c2d6ba] text-[#2f4f2f]"
+      ? "bg-green-100 dark:bg-green-950/40 border border-green-300 dark:border-green-800 text-green-900 dark:text-green-200"
       : answerDeadlineInfo.tone === "orange"
-      ? "bg-[#f6e3cc] border border-[#e4c49b] text-[#7a4f24]"
-      : "bg-[#f8d9d6] border border-[#e9b4ac] text-[#7f2d2d]"
+      ? "bg-orange-100 dark:bg-orange-950/40 border border-orange-300 dark:border-orange-800 text-orange-900 dark:text-orange-200"
+      : "bg-red-100 dark:bg-red-950/40 border border-red-300 dark:border-red-800 text-red-900 dark:text-red-200"
     : data.interviewLocked
-    ? "bg-[#efe4d8] border border-[#dfc8b5] text-[#6c5b4a]"
-    : "bg-[#efe7dd] border border-dashed border-[#d8c9b8] text-[#7a6f64]";
+    ? "bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200"
+    : "bg-[#efe7dd] dark:bg-[#2a2623] border border-dashed border-line text-muted";
 
   let deadlinePrimaryText = "";
   let deadlineSecondaryText = null;
@@ -970,8 +970,8 @@ export default function UserDetail() {
                   <div
                     className={`text-sm ${
                       questionsNotice.tone === "error"
-                        ? "text-[#b2563f]"
-                        : "text-[#1f5c3d]"
+                        ? "text-red-700 dark:text-red-400"
+                        : "text-green-700 dark:text-green-400"
                     }`}
                   >
                     {questionsNotice.message}
@@ -989,7 +989,7 @@ export default function UserDetail() {
                     </b>
                   </div>
                 ) : (
-                  <div className="text-sm text-[#b2563f]">
+                  <div className="text-sm text-red-700 dark:text-red-400">
                     Выберите или создайте главу.
                   </div>
                 )}
@@ -1041,7 +1041,7 @@ export default function UserDetail() {
                     </button>
                   </form>
                   {chapterCreateError ? (
-                    <div className="text-sm text-[#b2563f]">{chapterCreateError}</div>
+                    <div className="text-sm text-red-700 dark:text-red-400">{chapterCreateError}</div>
                   ) : null}
                 </div>
 
@@ -1120,7 +1120,7 @@ export default function UserDetail() {
                     </div>
 
                     {manualError ? (
-                      <div className="text-sm text-[#b2563f]">{manualError}</div>
+                      <div className="text-sm text-red-700 dark:text-red-400">{manualError}</div>
                     ) : null}
 
                     <div className="flex justify-end modal-actions">
@@ -1143,7 +1143,7 @@ export default function UserDetail() {
                         {templatesLoading ? (
                           <div className="text-muted text-sm">Загрузка шаблонов...</div>
                         ) : templatesError ? (
-                          <div className="text-sm text-[#b2563f]">{templatesError}</div>
+                          <div className="text-sm text-red-700 dark:text-red-400">{templatesError}</div>
                         ) : (
                           <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
                             {templatesList.map((template) => (
@@ -1192,7 +1192,7 @@ export default function UserDetail() {
                             Обновить
                           </button>
                           {templateActionError ? (
-                            <div className="text-[#b2563f] text-sm">
+                            <div className="text-red-700 dark:text-red-400 text-sm">
                               {templateActionError}
                             </div>
                           ) : null}
@@ -1220,7 +1220,7 @@ export default function UserDetail() {
                           )}
                         </div>
                         {templateActionError ? (
-                          <div className="text-[#b2563f] text-sm">
+                          <div className="text-red-700 dark:text-red-400 text-sm">
                             {templateActionError}
                           </div>
                         ) : null}
@@ -1305,7 +1305,7 @@ export default function UserDetail() {
                           )}
                         </div>
                         {templateActionError ? (
-                          <div className="text-[#b2563f] text-sm">
+                          <div className="text-red-700 dark:text-red-400 text-sm">
                             {templateActionError}
                           </div>
                         ) : null}
@@ -1374,7 +1374,7 @@ export default function UserDetail() {
         </div>
 
         <div className="paper p-3 space-y-3">
-          <div className="font-semibold text-sm tracking-wide uppercase text-[#7a6f64]">
+          <div className="font-semibold text-sm tracking-wide uppercase text-muted">
             Telegram
           </div>
           {telegram ? (
@@ -1493,7 +1493,7 @@ export default function UserDetail() {
           {!questionsModalOpen && questionsNotice ? (
             <div
               className={`text-sm ${
-                questionsNotice.tone === "error" ? "text-[#b2563f]" : "text-[#1f5c3d]"
+                questionsNotice.tone === "error" ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
               }`}
             >
               {questionsNotice.message}
@@ -1501,7 +1501,7 @@ export default function UserDetail() {
           ) : null}
 
           {questionsError ? (
-            <div className="text-sm text-[#b2563f]">{questionsError}</div>
+            <div className="text-sm text-red-700 dark:text-red-400">{questionsError}</div>
           ) : null}
 
           <div className="space-y-4 mt-2">
@@ -1548,7 +1548,7 @@ export default function UserDetail() {
                         key={question.id}
                         className="p-3 border border-line rounded-[14px] bg-paper flex items-start gap-3"
                       >
-                        <div className="w-6 h-6 grid place-items-center rounded-full bg-gradient-to-b from-gold to-blush text-[#5b5246] shrink-0">
+                        <div className="w-6 h-6 grid place-items-center rounded-full bg-gradient-to-b from-gold to-blush text-[#5b5246] dark:text-[#2a2623] shrink-0">
                           {questionIndex + 1}
                         </div>
                         <div className="flex-1 whitespace-pre-wrap break-words">
@@ -1587,7 +1587,7 @@ export default function UserDetail() {
           </div>
 
           {exportError ? (
-            <div className="text-sm text-[#b2563f]">{exportError}</div>
+            <div className="text-sm text-red-700 dark:text-red-400">{exportError}</div>
           ) : null}
 
           {answeredChapterGroups.length === 0 ? (
@@ -1699,7 +1699,7 @@ export default function UserDetail() {
               </div>
 
               {editChapterError ? (
-                <div className="text-sm text-[#b2563f]">{editChapterError}</div>
+                <div className="text-sm text-red-700 dark:text-red-400">{editChapterError}</div>
               ) : null}
 
               <div className="flex justify-end gap-2 modal-actions">
