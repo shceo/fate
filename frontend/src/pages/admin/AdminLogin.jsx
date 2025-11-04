@@ -64,7 +64,7 @@ export default function AdminLogin() {
               autoComplete="one-time-code"
             />
           </div>
-          {err && <div className="text-red-600">{err}</div>}
+          {err && <div className="text-red-700 dark:text-red-400">{err}</div>}
           <div className="flex gap-2">
             <button className="btn primary" type="submit">
               Войти
