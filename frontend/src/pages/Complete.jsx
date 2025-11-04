@@ -36,7 +36,7 @@ export default function Complete() {
       <section className="container mx-auto px-4 py-6">
         <div className="paper p-5 space-y-4">
           <div>
-            <h2 className="font-serif text-[1.6rem] mb-1">
+            <h2 className="font-serif text-[1.6rem] mb-1 text-ink">
               Спасибо! Мы получили ваши ответы.
             </h2>
             <p className="text-muted">

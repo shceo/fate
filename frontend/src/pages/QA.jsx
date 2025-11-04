@@ -532,7 +532,7 @@ export default function QA() {
     mainContent = (
       <section className="paper p-6 space-y-6">
         <div className="space-y-2 text-center">
-          <h1 className="font-serif text-[clamp(1.6rem,3.6vw,2.2rem)]">
+          <h1 className="font-serif text-[clamp(1.6rem,3.6vw,2.2rem)] text-ink">
             Выберите главу
           </h1>
           <p className="text-muted">
@@ -617,7 +617,7 @@ export default function QA() {
         </div>
 
         <div className="space-y-1">
-          <h1 className="font-serif text-[clamp(1.6rem,3.6vw,2.2rem)]">
+          <h1 className="font-serif text-[clamp(1.6rem,3.6vw,2.2rem)] text-ink">
             {chapterHeading}
           </h1>
           {chapterSubtitle ? (
@@ -633,7 +633,7 @@ export default function QA() {
         <Progress value={progress} />
 
         {chapterQuestionCount === 0 ? (
-          <div className="border border-dashed border-line rounded-[16px] bg-[rgba(255,255,255,.65)] p-6 text-center space-y-2">
+          <div className="border border-dashed border-line rounded-[16px] bg-[rgba(255,255,255,.65)] dark:bg-[rgba(45,42,38,.65)] p-6 text-center space-y-2">
             <div className="font-semibold">В этой главе пока нет вопросов</div>
             <div className="text-muted text-sm">
               Дождитесь, когда редакция добавит вопросы, или выберите другую
@@ -651,7 +651,7 @@ export default function QA() {
                   Общий номер: {safeIndex + 1}
                 </div>
               </div>
-              <div className="border border-dashed border-line rounded-[16px] bg-[rgba(255,255,255,.75)] p-4 text-[1.05rem] leading-relaxed whitespace-pre-wrap break-words">
+              <div className="border border-dashed border-line rounded-[16px] bg-[rgba(255,255,255,.75)] dark:bg-[rgba(45,42,38,.75)] p-4 text-[1.05rem] leading-relaxed whitespace-pre-wrap break-words text-ink">
                 {currentQuestion || "Текст вопроса недоступен."}
               </div>
             </div>
