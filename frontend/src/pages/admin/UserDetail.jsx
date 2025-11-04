@@ -168,7 +168,14 @@ export default function UserDetail() {
   const [chapterToDelete, setChapterToDelete] = useState(null);
   const [deleteChapterBusy, setDeleteChapterBusy] = useState(false);
 
-  useBodyScrollLock(questionsModalOpen || editChapterModalOpen);
+  const [sendTemplateModalOpen, setSendTemplateModalOpen] = useState(false);
+  const [sendTemplateLoading, setSendTemplateLoading] = useState(false);
+  const [sendTemplateError, setSendTemplateError] = useState(null);
+  const [sendTemplatesList, setSendTemplatesList] = useState([]);
+  const [selectedSendTemplate, setSelectedSendTemplate] = useState(null);
+  const [sendTemplateBusy, setSendTemplateBusy] = useState(false);
+
+  useBodyScrollLock(questionsModalOpen || editChapterModalOpen || sendTemplateModalOpen);
 
   const coverDisplay = useMemo(() => {
     const source = {
@@ -902,6 +909,64 @@ export default function UserDetail() {
     setChapterToDelete(null);
   };
 
+  const openSendTemplateModal = async () => {
+    setSendTemplateModalOpen(true);
+    setSendTemplateLoading(true);
+    setSendTemplateError(null);
+    setSelectedSendTemplate(null);
+    try {
+      const response = await fetch("/api/admin/templates", {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Не удалось загрузить список шаблонов.");
+      }
+      const payload = await response.json();
+      setSendTemplatesList(Array.isArray(payload.templates) ? payload.templates : []);
+    } catch (error) {
+      console.error(error);
+      setSendTemplateError(
+        error.message || "Не удалось загрузить список шаблонов."
+      );
+    } finally {
+      setSendTemplateLoading(false);
+    }
+  };
+
+  const closeSendTemplateModal = () => {
+    setSendTemplateModalOpen(false);
+    setSelectedSendTemplate(null);
+    setSendTemplateError(null);
+  };
+
+  const handleSendTemplate = async () => {
+    if (!selectedSendTemplate) {
+      setSendTemplateError("Выберите шаблон.");
+      return;
+    }
+    setSendTemplateBusy(true);
+    setSendTemplateError(null);
+    try {
+      const response = await apiPost(
+        `/api/admin/templates/${selectedSendTemplate.id}/send/${id}`,
+        {}
+      );
+      await reload();
+      closeSendTemplateModal();
+      showQuestionsNotice(
+        `Шаблон отправлен! Добавлено ${response.chaptersAdded || 0} глав с ${response.totalQuestions || 0} вопросами.`,
+        "success"
+      );
+    } catch (error) {
+      console.error(error);
+      setSendTemplateError(
+        error.message || "Не удалось отправить шаблон. Попробуйте ещё раз."
+      );
+    } finally {
+      setSendTemplateBusy(false);
+    }
+  };
+
   if (!data) return null;
 
   const telegram = data.telegram || null;
@@ -1485,9 +1550,14 @@ export default function UserDetail() {
           </div>
 
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <button className="btn primary" onClick={openQuestionsModal}>
-              Управление вопросами
-            </button>
+            <div className="flex gap-2 flex-wrap">
+              <button className="btn primary" onClick={openQuestionsModal}>
+                Управление вопросами
+              </button>
+              <button className="btn" onClick={openSendTemplateModal}>
+                Отправить шаблон с главами
+              </button>
+            </div>
           </div>
 
           {!questionsModalOpen && questionsNotice ? (
@@ -1742,6 +1812,129 @@ export default function UserDetail() {
         onConfirm={confirmDeleteChapter}
         onCancel={cancelDeleteChapter}
       />
+
+      {sendTemplateModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-card w-[min(720px,96vw)] space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <h3 className="font-serif text-[1.6rem] text-ink">
+                  Отправить шаблон с главами
+                </h3>
+                <div className="text-sm text-muted">
+                  Выберите шаблон, чтобы отправить все его главы и вопросы пользователю.
+                </div>
+              </div>
+              <button className="btn icon-btn" onClick={closeSendTemplateModal}>
+                X
+              </button>
+            </div>
+
+            {sendTemplateLoading ? (
+              <div className="text-muted">Загрузка шаблонов...</div>
+            ) : sendTemplateError && !sendTemplatesList.length ? (
+              <div className="text-sm text-red-700 dark:text-red-400">
+                {sendTemplateError}
+              </div>
+            ) : sendTemplatesList.length === 0 ? (
+              <div className="text-muted">
+                Нет доступных шаблонов. Создайте шаблон в разделе "Шаблоны вопросов".
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+                  {sendTemplatesList.map((template) => {
+                    const isSelected = selectedSendTemplate?.id === template.id;
+                    return (
+                      <div
+                        key={template.id}
+                        className={`border rounded-[12px] p-4 space-y-2 cursor-pointer transition ${
+                          isSelected
+                            ? "border-ink bg-white/90 dark:bg-[rgba(45,42,38,0.9)]"
+                            : "border-line bg-white/70 dark:bg-[rgba(45,42,38,0.7)] hover:bg-white/80 dark:hover:bg-[rgba(45,42,38,0.8)]"
+                        }`}
+                        onClick={() => setSelectedSendTemplate(template)}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="radio"
+                              name="send-template"
+                              checked={isSelected}
+                              onChange={() => setSelectedSendTemplate(template)}
+                              className="mt-1"
+                            />
+                            <div>
+                              <div className="font-semibold">{template.title}</div>
+                              {template.description && (
+                                <div className="text-muted text-sm">
+                                  {template.description}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right text-sm text-muted">
+                            <div>Вопросов: {template.questionCount ?? 0}</div>
+                          </div>
+                        </div>
+
+                        {template.chapters && template.chapters.length > 0 && (
+                          <div className="pl-8 space-y-1 text-sm">
+                            <div className="text-muted font-medium">
+                              Глав: {template.chapters.length}
+                            </div>
+                            <div className="space-y-1 text-xs text-muted">
+                              {template.chapters.slice(0, 3).map((chapter, idx) => (
+                                <div key={chapter.id}>
+                                  • {chapter.title || `Глава ${idx + 1}`} ({chapter.questions?.length || 0} вопросов)
+                                </div>
+                              ))}
+                              {template.chapters.length > 3 && (
+                                <div>
+                                  ... и ещё {template.chapters.length - 3} глав
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {template.firstQuestion && !template.chapters && (
+                          <div className="pl-8 text-sm text-muted whitespace-pre-wrap break-words border border-dashed border-line rounded-[10px] bg-white/80 p-2">
+                            {template.firstQuestion}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {sendTemplateError && (
+                  <div className="text-sm text-red-700 dark:text-red-400">
+                    {sendTemplateError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 modal-actions">
+                  <button
+                    className="btn"
+                    onClick={closeSendTemplateModal}
+                    disabled={sendTemplateBusy}
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    className="btn primary"
+                    onClick={handleSendTemplate}
+                    disabled={!selectedSendTemplate || sendTemplateBusy}
+                  >
+                    {sendTemplateBusy ? "Отправляем..." : "Отправить"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
     </>
   );
