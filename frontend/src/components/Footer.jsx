@@ -3,7 +3,7 @@ import Logo from "./Logo.jsx";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-line py-8 text-muted bg-gradient-to-t from-white/60 dark:from-[rgba(37,34,32,0.6)] to-transparent">
+    <footer className="border-t border-line py-8 text-muted bg-gradient-to-t from-white/60 to-transparent">
       <div className="container mx-auto px-4 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <div className="font-serif text-[1.1rem]">

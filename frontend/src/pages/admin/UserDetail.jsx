@@ -328,10 +328,10 @@ export default function UserDetail() {
     <div
       className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-[16px] shadow-lg border ${
         statusNotice.tone === "error"
-          ? "bg-red-50 dark:bg-red-950/60 border-red-300 dark:border-red-800 text-red-800 dark:text-red-200"
+          ? "bg-red-50 border-red-300 text-red-800"
           : statusNotice.tone === "success"
-          ? "bg-green-50 dark:bg-green-950/60 border-green-300 dark:border-green-800 text-green-800 dark:text-green-200"
-          : "bg-[rgba(255,255,255,.95)] dark:bg-[rgba(37,34,32,.95)] border-line text-ink"
+          ? "bg-green-50 border-green-300 text-green-800"
+          : "bg-[rgba(255,255,255,.95)] border-line text-ink"
       }`}
     >
       {statusNotice.message}
@@ -981,13 +981,13 @@ export default function UserDetail() {
 
   const deadlineToneClass = answerDeadlineInfo
     ? answerDeadlineInfo.tone === "green"
-      ? "bg-green-100 dark:bg-green-950/40 border border-green-300 dark:border-green-800 text-green-900 dark:text-green-200"
+      ? "bg-green-100 border border-green-300 text-green-900"
       : answerDeadlineInfo.tone === "orange"
-      ? "bg-orange-100 dark:bg-orange-950/40 border border-orange-300 dark:border-orange-800 text-orange-900 dark:text-orange-200"
-      : "bg-red-100 dark:bg-red-950/40 border border-red-300 dark:border-red-800 text-red-900 dark:text-red-200"
+      ? "bg-orange-100 border border-orange-300 text-orange-900"
+      : "bg-red-100 border border-red-300 text-red-900"
     : data.interviewLocked
-    ? "bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200"
-    : "bg-[#efe7dd] dark:bg-[#2a2623] border border-dashed border-line text-muted";
+    ? "bg-amber-50 border border-amber-200 text-amber-900"
+    : "bg-[#efe7dd] border border-dashed border-line text-muted";
 
   let deadlinePrimaryText = "";
   let deadlineSecondaryText = null;
@@ -1035,8 +1035,8 @@ export default function UserDetail() {
                   <div
                     className={`text-sm ${
                       questionsNotice.tone === "error"
-                        ? "text-red-700 dark:text-red-400"
-                        : "text-green-700 dark:text-green-400"
+                        ? "text-red-700"
+                        : "text-green-700"
                     }`}
                   >
                     {questionsNotice.message}
@@ -1054,7 +1054,7 @@ export default function UserDetail() {
                     </b>
                   </div>
                 ) : (
-                  <div className="text-sm text-red-700 dark:text-red-400">
+                  <div className="text-sm text-red-700">
                     Выберите или создайте главу.
                   </div>
                 )}
@@ -1106,7 +1106,7 @@ export default function UserDetail() {
                     </button>
                   </form>
                   {chapterCreateError ? (
-                    <div className="text-sm text-red-700 dark:text-red-400">{chapterCreateError}</div>
+                    <div className="text-sm text-red-700">{chapterCreateError}</div>
                   ) : null}
                 </div>
 
@@ -1185,7 +1185,7 @@ export default function UserDetail() {
                     </div>
 
                     {manualError ? (
-                      <div className="text-sm text-red-700 dark:text-red-400">{manualError}</div>
+                      <div className="text-sm text-red-700">{manualError}</div>
                     ) : null}
 
                     <div className="flex justify-end modal-actions">
@@ -1208,7 +1208,7 @@ export default function UserDetail() {
                         {templatesLoading ? (
                           <div className="text-muted text-sm">Загрузка шаблонов...</div>
                         ) : templatesError ? (
-                          <div className="text-sm text-red-700 dark:text-red-400">{templatesError}</div>
+                          <div className="text-sm text-red-700">{templatesError}</div>
                         ) : (
                           <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
                             {templatesList.map((template) => (
@@ -1257,7 +1257,7 @@ export default function UserDetail() {
                             Обновить
                           </button>
                           {templateActionError ? (
-                            <div className="text-red-700 dark:text-red-400 text-sm">
+                            <div className="text-red-700 text-sm">
                               {templateActionError}
                             </div>
                           ) : null}
@@ -1285,7 +1285,7 @@ export default function UserDetail() {
                           )}
                         </div>
                         {templateActionError ? (
-                          <div className="text-red-700 dark:text-red-400 text-sm">
+                          <div className="text-red-700 text-sm">
                             {templateActionError}
                           </div>
                         ) : null}
@@ -1370,7 +1370,7 @@ export default function UserDetail() {
                           )}
                         </div>
                         {templateActionError ? (
-                          <div className="text-red-700 dark:text-red-400 text-sm">
+                          <div className="text-red-700 text-sm">
                             {templateActionError}
                           </div>
                         ) : null}
@@ -1563,7 +1563,7 @@ export default function UserDetail() {
           {!questionsModalOpen && questionsNotice ? (
             <div
               className={`text-sm ${
-                questionsNotice.tone === "error" ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
+                questionsNotice.tone === "error" ? "text-red-700" : "text-green-700"
               }`}
             >
               {questionsNotice.message}
@@ -1571,7 +1571,7 @@ export default function UserDetail() {
           ) : null}
 
           {questionsError ? (
-            <div className="text-sm text-red-700 dark:text-red-400">{questionsError}</div>
+            <div className="text-sm text-red-700">{questionsError}</div>
           ) : null}
 
           <div className="space-y-4 mt-2">
@@ -1618,7 +1618,7 @@ export default function UserDetail() {
                         key={question.id}
                         className="p-3 border border-line rounded-[14px] bg-paper flex items-start gap-3"
                       >
-                        <div className="w-6 h-6 grid place-items-center rounded-full bg-gradient-to-b from-gold to-blush text-[#5b5246] dark:text-[#2a2623] shrink-0">
+                        <div className="w-6 h-6 grid place-items-center rounded-full bg-gradient-to-b from-gold to-blush text-[#5b5246] shrink-0">
                           {questionIndex + 1}
                         </div>
                         <div className="flex-1 whitespace-pre-wrap break-words">
@@ -1657,7 +1657,7 @@ export default function UserDetail() {
           </div>
 
           {exportError ? (
-            <div className="text-sm text-red-700 dark:text-red-400">{exportError}</div>
+            <div className="text-sm text-red-700">{exportError}</div>
           ) : null}
 
           {answeredChapterGroups.length === 0 ? (
@@ -1769,7 +1769,7 @@ export default function UserDetail() {
               </div>
 
               {editChapterError ? (
-                <div className="text-sm text-red-700 dark:text-red-400">{editChapterError}</div>
+                <div className="text-sm text-red-700">{editChapterError}</div>
               ) : null}
 
               <div className="flex justify-end gap-2 modal-actions">
@@ -1833,7 +1833,7 @@ export default function UserDetail() {
             {sendTemplateLoading ? (
               <div className="text-muted">Загрузка шаблонов...</div>
             ) : sendTemplateError && !sendTemplatesList.length ? (
-              <div className="text-sm text-red-700 dark:text-red-400">
+              <div className="text-sm text-red-700">
                 {sendTemplateError}
               </div>
             ) : sendTemplatesList.length === 0 ? (
@@ -1850,8 +1850,8 @@ export default function UserDetail() {
                         key={template.id}
                         className={`border rounded-[12px] p-4 space-y-2 cursor-pointer transition ${
                           isSelected
-                            ? "border-ink bg-white/90 dark:bg-[rgba(45,42,38,0.9)]"
-                            : "border-line bg-white/70 dark:bg-[rgba(45,42,38,0.7)] hover:bg-white/80 dark:hover:bg-[rgba(45,42,38,0.8)]"
+                            ? "border-ink bg-white/90"
+                            : "border-line bg-white/70 hover:bg-white/80"
                         }`}
                         onClick={() => setSelectedSendTemplate(template)}
                       >
@@ -1909,7 +1909,7 @@ export default function UserDetail() {
                 </div>
 
                 {sendTemplateError && (
-                  <div className="text-sm text-red-700 dark:text-red-400">
+                  <div className="text-sm text-red-700">
                     {sendTemplateError}
                   </div>
                 )}

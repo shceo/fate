@@ -633,7 +633,7 @@ export default function QA() {
         <Progress value={progress} />
 
         {chapterQuestionCount === 0 ? (
-          <div className="border border-dashed border-line rounded-[16px] bg-[rgba(255,255,255,.65)] dark:bg-[rgba(45,42,38,.65)] p-6 text-center space-y-2">
+          <div className="border border-dashed border-line rounded-[16px] bg-[rgba(255,255,255,.65)] p-6 text-center space-y-2">
             <div className="font-semibold">В этой главе пока нет вопросов</div>
             <div className="text-muted text-sm">
               Дождитесь, когда редакция добавит вопросы, или выберите другую
@@ -651,7 +651,7 @@ export default function QA() {
                   Общий номер: {safeIndex + 1}
                 </div>
               </div>
-              <div className="border border-dashed border-line rounded-[16px] bg-[rgba(255,255,255,.75)] dark:bg-[rgba(45,42,38,.75)] p-4 text-[1.05rem] leading-relaxed whitespace-pre-wrap break-words text-ink">
+              <div className="border border-dashed border-line rounded-[16px] bg-[rgba(255,255,255,.75)] p-4 text-[1.05rem] leading-relaxed whitespace-pre-wrap break-words text-ink">
                 {currentQuestion || "Текст вопроса недоступен."}
               </div>
             </div>
@@ -724,10 +724,10 @@ export default function QA() {
     <div
       className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-[16px] shadow-lg border ${
         toast.tone === "error"
-          ? "bg-red-50 dark:bg-red-950/60 border-red-300 dark:border-red-800 text-red-800 dark:text-red-200"
+          ? "bg-red-50 border-red-300 text-red-800"
           : toast.tone === "success"
-          ? "bg-green-50 dark:bg-green-950/60 border-green-300 dark:border-green-800 text-green-800 dark:text-green-200"
-          : "bg-[rgba(255,255,255,.95)] dark:bg-[rgba(37,34,32,.95)] border-line text-ink"
+          ? "bg-green-50 border-green-300 text-green-800"
+          : "bg-[rgba(255,255,255,.95)] border-line text-ink"
       }`}
     >
       {toast.message}

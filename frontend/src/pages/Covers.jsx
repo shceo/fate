@@ -126,7 +126,7 @@ export default function Covers() {
 
       <section className="container mx-auto px-4 mt-4 space-y-4">
         {error && (
-          <div className="card-glass px-4 py-3 text-sm text-red-700 dark:text-red-400">{error}</div>
+          <div className="card-glass px-4 py-3 text-sm text-red-700">{error}</div>
         )}
         <div className="grid gap-4 md:grid-cols-3">
           {COVER_TEMPLATES.map((option) => {

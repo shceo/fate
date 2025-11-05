@@ -98,7 +98,7 @@ export default function Home() {
                 className="paper p-4 grid grid-cols-[56px_1fr] gap-4 items-center"
               >
                 <div className="w-14 h-14 grid place-items-center rounded-[14px] bg-gradient-to-b from-gold to-blush shadow-tiny">
-                  <span className="text-[#5b5246] dark:text-[#2a2623] font-semibold">{index + 1}</span>
+                  <span className="text-[#5b5246] font-semibold">{index + 1}</span>
                 </div>
                 <div>
                   <h3 className="font-semibold">{step.title}</h3>
