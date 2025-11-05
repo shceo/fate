@@ -1,3 +1,4 @@
+
 CREATE TABLE IF NOT EXISTS app_users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
