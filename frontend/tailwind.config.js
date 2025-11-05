@@ -5,20 +5,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: 'var(--bg)',
-        paper: 'var(--paper)',
-        ink: 'var(--ink)',
-        muted: 'var(--muted)',
-        line: 'var(--line)',
-        accent: 'var(--accent)',
-        gold: 'var(--gold)',
-        blush: 'var(--blush)',
-        sage: 'var(--sage)',
-        sky: 'var(--sky)',
-        lav: 'var(--lav)',
+        bg: '#F5EFE6', paper: '#FAF7F2', ink: '#2B2A27', muted: '#8C8072', line: '#E8E1D8',
+        accent: '#D0B8A8', gold: '#E8D5B5', blush: '#F1DAD4', sage: '#DCE6D5', sky: '#DDEAF3', lav: '#EAE4F2',
       },
-      boxShadow: { soft: 'var(--shadow-soft)', tiny: 'var(--shadow-tiny)' },
-      borderRadius: { lgx: 'var(--radius-lg)', mdx: 'var(--radius-md)', smx: 'var(--radius-sm)' },
+      boxShadow: { soft: '0 10px 30px rgba(126,108,87,0.15)', tiny: '0 2px 12px rgba(110,92,74,0.10)' },
+      borderRadius: { lgx: '20px', mdx: '14px', smx: '10px' },
       fontFamily: { serif: ['"Cormorant Garamond"','serif'], sans: ['Inter','system-ui','sans-serif'] }
     },
   },

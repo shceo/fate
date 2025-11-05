@@ -168,7 +168,7 @@ export default function TelegramAuthSection() {
         )}
       </button>
       {status && <div className="text-sm text-muted text-center">{status}</div>}
-      {error && <div className="text-sm text-red-700 dark:text-red-400 text-center">{error}</div>}
+      {error && <div className="text-sm text-red-600 text-center">{error}</div>}
     </div>
   );
 }

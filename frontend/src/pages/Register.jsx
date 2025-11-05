@@ -82,7 +82,7 @@ export default function Register() {
                 autoComplete="new-password"
               />
             </div>
-            {err && <div className="text-red-700 dark:text-red-400">{err}</div>}
+            {err && <div className="text-red-600">{err}</div>}
             <div className="pt-1">
               <button className="btn primary w-full justify-center" type="submit">
                 Создать аккаунт
