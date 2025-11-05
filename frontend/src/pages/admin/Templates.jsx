@@ -96,7 +96,7 @@ function ChapterEditor({ chapter, index, onChange, onDelete, disabled }) {
       </div>
 
       {questions.list.length > 0 && (
-        <div className="border border-dashed border-line rounded-[12px] bg-white/70 dark:bg-[rgba(45,42,38,0.7)] p-3 space-y-2">
+        <div className="border border-dashed border-line rounded-[12px] bg-white/70 p-3 space-y-2">
           <div className="text-xs uppercase tracking-wide text-muted">
             Предпросмотр
           </div>
@@ -162,7 +162,7 @@ function TemplateCard({ template, onEdit, onDelete }) {
               {template.chapters.map((chapter, idx) => (
                 <div
                   key={chapter.id}
-                  className="border border-line rounded-[12px] bg-white/60 dark:bg-[rgba(45,42,38,0.6)] p-3 space-y-2"
+                  className="border border-line rounded-[12px] bg-white/60 p-3 space-y-2"
                 >
                   <div className="font-semibold text-sm">
                     {chapter.title || `Глава ${idx + 1}`}
@@ -513,7 +513,7 @@ export default function Templates() {
           </div>
 
           {createError && (
-            <div className="text-sm text-red-700 dark:text-red-400">{createError}</div>
+            <div className="text-sm text-red-700">{createError}</div>
           )}
 
           <button type="submit" className="btn primary" disabled={createBusy}>
@@ -530,7 +530,7 @@ export default function Templates() {
           </button>
         </div>
 
-        {loadError && <div className="text-red-700 dark:text-red-400">{loadError}</div>}
+        {loadError && <div className="text-red-700">{loadError}</div>}
 
         {loading ? (
           <div className="paper p-4 text-muted">Загрузка шаблонов...</div>
@@ -627,7 +627,7 @@ export default function Templates() {
                 </div>
 
                 {editError && (
-                  <div className="text-sm text-red-700 dark:text-red-400">{editError}</div>
+                  <div className="text-sm text-red-700">{editError}</div>
                 )}
 
                 <div className="flex items-center justify-end gap-2">

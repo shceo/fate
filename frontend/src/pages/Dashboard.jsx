@@ -109,7 +109,7 @@ export default function Dashboard() {
             </div>
           ) : interviewLocked ? (
             <div className="space-y-4">
-              <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)] dark:bg-[rgba(45,42,38,.65)]">
+              <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
                 <span className="text-xl" aria-hidden="true">
                   ✅
                 </span>
@@ -127,7 +127,7 @@ export default function Dashboard() {
             </div>
           ) : showQuestionsButton ? (
             <div className="space-y-4">
-              <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)] dark:bg-[rgba(45,42,38,.65)]">
+              <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
                 <span className="text-xl" aria-hidden="true">
                   ✍️
                 </span>
@@ -154,7 +154,7 @@ export default function Dashboard() {
               </button>
             </div>
           ) : (
-            <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)] dark:bg-[rgba(45,42,38,.65)]">
+            <div className="flex items-start gap-3 p-4 border border-line rounded-[14px] bg-[rgba(255,255,255,.65)]">
               <span className="text-xl" aria-hidden="true">
                 ⏳
               </span>
