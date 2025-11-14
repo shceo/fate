@@ -149,14 +149,7 @@ export default function TelegramAuthSection() {
 
   return (
     <div className="space-y-3">
-      {/* {widgetAllowed && (
-        <>
-          <TelegramLoginButton onSuccess={handleSuccess} />
-          <div className="text-center text-sm text-muted">
-            или войдите через бота Fate в Telegram
-          </div>
-        </>
-      )} */}
+
       <button type="button" className="btn w-full justify-center" onClick={startBotFlow} disabled={loading}>
         {loading ? (
           "Ждём подтверждения..."

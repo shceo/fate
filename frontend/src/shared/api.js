@@ -22,7 +22,7 @@ export async function apiPost(url, body) {
     try {
       details = await r.json();
     } catch (_error) {
-      // ignore parsing errors
+
     }
     const message =
       typeof details?.message === "string" && details.message.length
@@ -52,7 +52,7 @@ export async function apiPut(url, body) {
     try {
       details = await r.json();
     } catch (_error) {
-      // ignore parsing errors
+
     }
     const message =
       typeof details?.message === "string" && details.message.length
@@ -84,7 +84,7 @@ export async function apiDelete(url) {
     try {
       details = await r.json();
     } catch (_error) {
-      // ignore parsing errors
+
     }
     const message =
       typeof details?.message === "string" && details.message.length

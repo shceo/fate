@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- Базовые переменные темы (внутри Tailwind layer, чтобы не выпилились) --- */
+
 @layer base {
   :root{
     --bg:#F5EFE6; --paper:#FAF7F2; --ink:#2B2A27; --muted:#8C8072; --line:#E8E1D8;
@@ -22,7 +22,7 @@
   }
 }
 
-/* --- Компоненты: точный вид кнопок/полей как раньше --- */
+
 @layer components {
   .card-glass{
     background:linear-gradient(180deg,rgba(255,255,255,.58),rgba(255,255,255,.42));
