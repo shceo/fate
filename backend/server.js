@@ -64,8 +64,8 @@ const STATUS_LABELS = {
 const TELEGRAM_HASH_SECRET = TG_BOT_TOKEN
   ? crypto.createHash('sha256').update(TG_BOT_TOKEN).digest()
   : null;
-const TELEGRAM_AUTH_MAX_AGE = 24 * 60 * 60; // 1 day in seconds
-const TELEGRAM_NONCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const TELEGRAM_AUTH_MAX_AGE = 24 * 60 * 60;
+const TELEGRAM_NONCE_TTL_MS = 10 * 60 * 1000;
 const pendingLogins = new Map();
 
 const BASE_USER_FIELDS = `id, name, email, is_admin, cover, ordered, status,
@@ -674,7 +674,7 @@ function parseCoverRowValue(raw) {
       }
     }
   } catch (_error) {
-    // ignore parsing issues, fall back to legacy behaviour
+
   }
   const trimmed = raw.trim();
   if (!trimmed) return null;
