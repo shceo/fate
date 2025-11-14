@@ -66,7 +66,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Users /> },
       { path: "users/:id", element: <UserDetail /> },
-      { path: "templates", element: <Templates /> }, // ← добавить
+      { path: "templates", element: <Templates /> },
       { path: "settings", element: <Settings /> },
     ],
   },

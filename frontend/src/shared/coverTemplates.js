@@ -81,7 +81,7 @@ export function parseCoverValue(raw) {
       }
     }
   } catch (_) {
-    // Intentionally swallow JSON parse errors — fall back to legacy string
+
   }
   const trimmed = raw.trim();
   if (!trimmed) return null;

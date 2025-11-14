@@ -15,13 +15,13 @@ import { apiPost } from "../shared/api.js";
 import { useAuth } from "../shared/AuthContext.jsx";
 import { useQuestions } from "../shared/QuestionsContext.jsx";
 
-// ---------- Константы ----------
+
 const AUTO_SAVE_DELAY = 1500;
 const AUTO_SAVE_STATE_RESET = 4000;
 const TOAST_DURATION = 4000;
 const APPROX_DURATION_LABEL = "~30 минут";
 
-// ---------- Вспомогательные функции (вне компонента) ----------
+
 function chapterKeyFor(chapter, index) {
   if (chapter && chapter.id !== undefined && chapter.id !== null) {
     return String(chapter.id);
@@ -131,7 +131,7 @@ function formatChapterTitle(chapter, index) {
   return { heading, subtitle };
 }
 
-// =================== КОМПОНЕНТ ===================
+
 export default function QA() {
   const navigate = useNavigate();
   const { refreshUser, setUser, user } = useAuth();
@@ -151,7 +151,7 @@ export default function QA() {
     resumeIndex,
   } = useQuestions();
 
-  // ---------- State/Refs ----------
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeChapterKey, setActiveChapterKey] = useState(null);
   const [draft, setDraft] = useState("");
@@ -172,7 +172,7 @@ export default function QA() {
 
   const totalQuestions = questions.length;
 
-  // ---------- Нормализация глав и карты индексов ----------
+
   const normalizedChapters = useMemo(
     () => normalizeChapters(chapters, totalQuestions),
     [chapters, totalQuestions]
@@ -183,7 +183,7 @@ export default function QA() {
     [totalQuestions, normalizedChapters]
   );
 
-  // ---------- Текущая активная глава / её границы ----------
+
   const activeChapterIndex = useMemo(() => {
     if (activeChapterKey === null) return -1;
     return normalizedChapters.findIndex(
@@ -216,7 +216,7 @@ export default function QA() {
     return Math.max(chapterStartIndex, sanitizeIndex(rawEnd, totalQuestions));
   })();
 
-  // ---------- Очистка таймеров ----------
+
   const handleCleanup = useCallback(() => {
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
@@ -233,7 +233,7 @@ export default function QA() {
   }, []);
   useEffect(() => handleCleanup, [handleCleanup]);
 
-  // ---------- Держим currentIndex валидным ----------
+
   useEffect(() => {
     if (!totalQuestions) {
       setCurrentIndex(0);
@@ -242,7 +242,7 @@ export default function QA() {
     setCurrentIndex((prev) => sanitizeIndex(prev, totalQuestions));
   }, [totalQuestions]);
 
-  // ---------- Сброс активной главы, если её больше нет ----------
+
   useEffect(() => {
     if (activeChapterKey === null) return;
     const stillExists = normalizedChapters.some(
@@ -251,7 +251,7 @@ export default function QA() {
     if (!stillExists) setActiveChapterKey(null);
   }, [normalizedChapters, activeChapterKey]);
 
-  // ---------- Выставляем черновик при смене вопроса / ответов ----------
+
   useEffect(() => {
     if (!totalQuestions) {
       setDraft("");
@@ -266,7 +266,7 @@ export default function QA() {
     }
   }, [currentIndex, answersVersion, getAnswer, totalQuestions]);
 
-  // ---------- Фокус в textarea при переключении главы/вопроса ----------
+
   useEffect(() => {
     if (activeChapterKey === null) return;
     const el = textareaRef.current;
@@ -278,7 +278,7 @@ export default function QA() {
     });
   }, [activeChapterKey, currentIndex]);
 
-  // ---------- Первичная позиция (resume/localStorage) без функций в deps ----------
+
   useEffect(() => {
     if (initialSelectionAppliedRef.current) return;
     if (!loaded || loading) return;
@@ -336,7 +336,7 @@ export default function QA() {
     user?.id,
   ]);
 
-  // ---------- Сохраняем «последнюю позицию» ----------
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!user?.id) return;
@@ -351,7 +351,7 @@ export default function QA() {
     } catch (_) {}
   }, [user?.id, currentIndex, totalQuestions, activeChapterKey]);
 
-  // ---------- Тосты / автосохранение ----------
+
   const showToast = useCallback((message, tone = "info") => {
     setToast({ message, tone });
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -395,7 +395,7 @@ export default function QA() {
     [saveAnswers, markSaved]
   );
 
-  // ---------- Хэндлеры ----------
+
   const handleOpenChapter = useCallback(
     (chapter, idx) => {
       const key = chapterKeyFor(chapter, idx);
@@ -501,7 +501,7 @@ export default function QA() {
     markSaved,
   ]);
 
-  // ---------- Рендер ----------
+
   if (interviewLocked) return <Navigate to="/complete" replace />;
 
   const isLoading = loading && !loaded;
